@@ -602,6 +602,8 @@ void clidebugger_enter(vm *v) {
             error_clear(&err);
         }
         
+        if (input) free(input);
+        
         clidebugger_showinfo(&debug);
     }
     

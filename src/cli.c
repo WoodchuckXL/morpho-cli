@@ -109,6 +109,7 @@ void cli_inputcallbackfn(vm *v, void *ref, morphoinputmode mode, varray_char *st
         inline_editor *line=inline_new("");
         char *out=inline_readline(line);
         if (out) varray_charadd(str, out, (int) strlen(out));
+        free(out);
         inline_free(line);
     }
 }
@@ -352,7 +353,9 @@ void cli(clioptions opt) {
         } else {
             /** ... otherwise just raise an error. */
             cli_reporterror(&err, v);
-        } 
+        }
+        
+        if (input) free(input);
     }
     
     inline_free(edit);
