@@ -9,10 +9,10 @@
 
 #include "cli.h"
 
-#define DEBUGGER_PROMPT "@>"
+#define DEBUGGER_PROMPT "@> "
 
-#define DEBUGGER_COLOR LINEDIT_GREEN
-#define DEBUGGER_ERROR_COLOR LINEDIT_RED
+#define DEBUGGER_COLOR INLINE_GREEN
+#define DEBUGGER_ERROR_COLOR INLINE_RED
 
 #define DBG_PRS                         "DbgPrs"
 #define DBG_PRS_MSG                     "Couldn't parse command."

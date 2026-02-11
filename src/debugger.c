@@ -28,13 +28,13 @@ __declspec(dllimport) extern objecttype objectstringtype;
 
 typedef struct {
     debugger *debug; /** Debugger */
-    lineditor *edit; /** lineeditor for output */
+    inline_editor *edit; /** lineeditor for output */
     error *err; /** Error structure to fill out  */
     char *info; /** Report any info to the user after error messages */
     bool stop;
 } clidebugger;
 
-void clidebugger_init(clidebugger *debug, vm *v, lineditor *edit, error *err) {
+void clidebugger_init(clidebugger *debug, vm *v, inline_editor *edit, error *err) {
     debug->debug=vm_getdebugger(v);
     debugger_seterror(debug->debug, err);
     debug->edit=edit;
@@ -49,8 +49,8 @@ void clidebugger_init(clidebugger *debug, vm *v, lineditor *edit, error *err) {
 
 /** Display the morpho banner */
 void clidebugger_banner(clidebugger *debug) {
-    cli_displaywithstyle(debug->edit, DEBUGGER_COLOR, CLI_NOEMPHASIS, 1, "---Morpho debugger---\n");
-    cli_displaywithstyle(debug->edit, CLI_DEFAULTCOLOR, CLI_NOEMPHASIS, 1, "Type '?' or 'h' for help.\n");
+    cli_displaywithstyle(DEBUGGER_COLOR, CLI_NOEMPHASIS, 1, "---Morpho debugger---\n");
+    cli_displaywithstyle(CLI_DEFAULTCOLOR, CLI_NOEMPHASIS, 1, "Type '?' or 'h' for help.\n");
     
     morpho_printf(debugger_currentvm(debug->debug), "%s ", (debug->debug->singlestep ? "Single stepping" : "Breakpoint"));
     debugger_showlocation(debug->debug, debug->debug->iindx);
@@ -60,13 +60,13 @@ void clidebugger_banner(clidebugger *debug) {
 
 /** Display the resume text */
 void clidebugger_resumebanner(clidebugger *debug) {
-    cli_displaywithstyle(debug->edit, DEBUGGER_COLOR, CLI_NOEMPHASIS, 1, "---Resuming----------\n");
+    cli_displaywithstyle(DEBUGGER_COLOR, CLI_NOEMPHASIS, 1, "---Resuming----------\n");
 }
 
 /** Display an error message */
 void clidebugger_reporterror(clidebugger *debug) {
     if (debug->err->cat!=ERROR_NONE) {
-        cli_displaywithstyle(debug->edit, DEBUGGER_ERROR_COLOR, CLI_NOEMPHASIS, 3, "Error: ", debug->err->msg, "\n");
+        cli_displaywithstyle(DEBUGGER_ERROR_COLOR, CLI_NOEMPHASIS, 3, "Error: ", debug->err->msg, "\n");
     }
 }
 
@@ -116,7 +116,7 @@ void clidebugger_clearinfo(clidebugger *debug) {
 
 /** Show info */
 void clidebugger_showinfo(clidebugger *debug) {
-    if (debug->info) cli_displaywithstyle(debug->edit, CLI_DEFAULTCOLOR, CLI_NOEMPHASIS, 1, debug->info);
+    if (debug->info) cli_displaywithstyle(CLI_DEFAULTCOLOR, CLI_NOEMPHASIS, 1, debug->info);
 }
 
 /* **********************************************************************
@@ -586,17 +586,14 @@ void clidebugger_enter(vm *v) {
     error err;
     error_init(&err);
     
-    lineditor edit;
-    linedit_init(&edit);
-    linedit_setprompt(&edit, DEBUGGER_PROMPT);
-    
+    inline_editor *edit = inline_new(DEBUGGER_PROMPT);
     clidebugger debug;
-    clidebugger_init(&debug, v, &edit, &err);
+    clidebugger_init(&debug, v, edit, &err);
     clidebugger_banner(&debug);
     
     while (!debug.stop) {
         clidebugger_clearinfo(&debug);
-        char *input = linedit(&edit);
+        char *input = inline_readline(edit);
         if (!input) break;
         
         if (!clidebugger_parse(&debug, input) ||
@@ -610,7 +607,7 @@ void clidebugger_enter(vm *v) {
     
     clidebugger_resumebanner(&debug);
     
-    linedit_clear(&edit);
+    inline_free(edit);
     error_clear(&err);
 }
 

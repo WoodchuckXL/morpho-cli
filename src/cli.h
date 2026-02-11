@@ -11,18 +11,22 @@
 #include <varray.h>
 #include <common.h>
 
-#include "linedit.h"
+#include "inline.h"
 #include "help.h"
 
 #include "debugger.h"
 
-#define CLI_DEFAULTCOLOR LINEDIT_DEFAULTCOLOR
-#define CLI_ERRORCOLOR  LINEDIT_RED
-#define CLI_WARNINGCOLOR  LINEDIT_YELLOW
-#define CLI_NOEMPHASIS  LINEDIT_NONE
+#define CLI_DEFAULTCOLOR -1
+#define CLI_ERRORCOLOR  INLINE_RED
+#define CLI_WARNINGCOLOR  INLINE_YELLOW
 
-#define CLI_PROMPT ">"
-#define CLI_CONTINUATIONPROMPT "~"
+#define CLI_NOEMPHASIS  -1
+#define CLI_BOLD        0
+#define CLI_UNDERLINE   1
+#define CLI_ITALIC      2
+
+#define CLI_PROMPT "> "
+#define CLI_CONTINUATIONPROMPT "~ "
 #define CLI_QUIT "quit"
 #define CLI_HELP "help"
 #define CLI_SHORT_HELP "?"
@@ -38,9 +42,8 @@ typedef unsigned int clioptions;
 
 extern char *cli_globalsrc;
 
-void cli_displaywithstyle(lineditor *edit, linedit_color col, linedit_emphasis emph, int n, ...);
+void cli_displaywithstyle(int col, int emph, int n, ...);
 void cli_reporterror(error *err, vm *v);
-
 
 void cli_run(const char *in, clioptions opt);
 void cli(clioptions opt);

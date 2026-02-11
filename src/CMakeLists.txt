@@ -3,6 +3,6 @@ target_sources(morpho6
         cli.c       cli.h
         debugger.c  debugger.h
         help.c      help.h
-        linedit.c   linedit.h
+        inline.c    inline.h
         main.c    
 )

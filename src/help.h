@@ -12,7 +12,7 @@
 #include <morpho.h>
 #include <object.h>
 
-#include "linedit.h"
+#include "inline.h"
 
 extern objecttype objecthelptopictype;
 #define OBJECT_HELPTOPIC objecthelptopictype
@@ -33,7 +33,7 @@ typedef struct sobjecthelptopic {
 
 size_t help_querylength(char *query, char **s);
 objecthelptopic *help_search(char *query);
-void help_display(lineditor *edit, objecthelptopic *topic);
+void help_display(inline_editor *edit, objecthelptopic *topic);
 
 bool help_initialize(void);
 void help_finalize(void); 

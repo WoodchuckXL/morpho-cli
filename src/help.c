@@ -17,6 +17,7 @@ __declspec(dllimport) extern objecttype objectstringtype;
 __declspec(dllimport) extern objecttype objectlisttype; 
 #endif
 
+#include "cli.h"
 #include "help.h"
 
 /** The interactive help system uses a collection of Markdown files, located in
@@ -158,8 +159,8 @@ objecthelptopic *help_search(char *query) {
  * ********************************************************************** */
 
 /** Display a topic list */
-void help_topiclist(dictionary *dict, lineditor *edit) {
-    int width = linedit_getwidth(edit), max = 0;
+void help_topiclist(dictionary *dict, inline_editor *edit) {
+    int width = 80 /*linedit_getwidth(edit)*/, max = 0;
     
     objectlist list = MORPHO_STATICLIST;
     varray_valueinit(&list.val);
@@ -202,7 +203,7 @@ void help_topiclist(dictionary *dict, lineditor *edit) {
         }
         if (k==ncols-1 || i==list.val.count-1) {
             varray_charadd(&str, "\n\0", 2);
-            linedit_displaywithsyntaxcoloring(edit, str.data);
+            inline_displaywithsyntaxcoloring(edit, str.data);
             str.count=0; k=0;
         }
     }
@@ -212,15 +213,15 @@ void help_topiclist(dictionary *dict, lineditor *edit) {
 }
 
 /** Parse a 'show' command */
-static void help_show(objecthelptopic *topic, lineditor *edit, char *command) {
+static void help_show(objecthelptopic *topic, inline_editor *edit, char *command) {
     char *c=command;
     for (; isspace(*c); c++);
     if (*c=='(') c++;
     if (strncmp(c, "topics", 6)==0) {
-        linedit_displaywithstyle(edit, HELP_TOPICS, LINEDIT_DEFAULTCOLOR, LINEDIT_UNDERLINE);
+        cli_displaywithstyle(CLI_DEFAULTCOLOR, CLI_UNDERLINE, 1, HELP_TOPICS);
         help_topiclist(&helpdict, edit);
     } else if (strncmp(c, "subtopics", 9)==0) {
-        linedit_displaywithstyle(edit, HELP_SUBTOPICS, LINEDIT_DEFAULTCOLOR, LINEDIT_UNDERLINE);
+        cli_displaywithstyle(CLI_DEFAULTCOLOR, CLI_UNDERLINE, 1, HELP_SUBTOPICS);
         help_topiclist(&topic->subtopics, edit);
     }
 }
@@ -241,7 +242,7 @@ static size_t help_parsesegment(char *string, char delim) {
 }
 
 /** Parses a section of inline code */
-static char *help_parseinlinecode(lineditor *edit, char *string) {
+static char *help_parseinlinecode(inline_editor *edit, char *string) {
     char *s = string;
     if (*s=='`') s++;
     size_t nchars = help_parsesegment(s, '`');
@@ -251,12 +252,12 @@ static char *help_parseinlinecode(lineditor *edit, char *string) {
     strncpy(str, string+1, nchars);
     str[nchars]='\0';
     
-    linedit_displaywithsyntaxcoloring(edit, str);
+    inline_displaywithsyntaxcoloring(edit, str);
     return s + nchars;
 }
 
 /** Parses an emphasized section */
-static char *help_parseemph(lineditor *edit, char *string, char delim, linedit_color col, linedit_emphasis emph) {
+static char *help_parseemph(char *string, char delim, int col, int emph) {
     char *s = string;
     if (*s==delim) s++;
     size_t nchars = help_parsesegment(s, delim);
@@ -266,22 +267,22 @@ static char *help_parseemph(lineditor *edit, char *string, char delim, linedit_c
     strncpy(str, string+1, nchars);
     str[nchars]='\0';
     
-    linedit_displaywithstyle(edit, str, col, emph);
+    cli_displaywithstyle(col, emph, 1, str);
     return s + nchars;
 }
 
 /** Displays a single line of help text */
-static bool help_displayline(objecthelptopic *topic, lineditor *edit, char *line, bool allowheader) {
+static bool help_displayline(objecthelptopic *topic, inline_editor *edit, char *line, bool allowheader) {
     if (line[0]=='#') {
         if (allowheader) {
             char *s = line;
             while (*s=='#' || isspace(*s)) s++; // Skip leading space
-            linedit_displaywithstyle(edit, s, LINEDIT_DEFAULTCOLOR, LINEDIT_UNDERLINE);
+            cli_displaywithstyle(CLI_DEFAULTCOLOR, CLI_UNDERLINE, 1, s);
         } else {
             return true;
         }
     } else if (line[0]=='\t' || strncmp(line, "    ", 4)==0) {
-        linedit_displaywithsyntaxcoloring(edit, line);
+        inline_displaywithsyntaxcoloring(edit, line);
     } else if (line[0]=='[') {
         /*  Process commands */
         if (strncmp(line+1, "show", 4)==0) {
@@ -303,9 +304,9 @@ static bool help_displayline(objecthelptopic *topic, lineditor *edit, char *line
                 case '`':
                     next=help_parseinlinecode(edit, c); break;
                 case '*':
-                    next=help_parseemph(edit, c, '*', LINEDIT_DEFAULTCOLOR, LINEDIT_BOLD); break;
+                    next=help_parseemph(c, '*', CLI_DEFAULTCOLOR, CLI_BOLD); break;
                 case '_':
-                    next=help_parseemph(edit, c, '_', LINEDIT_DEFAULTCOLOR, LINEDIT_UNDERLINE); break;
+                    next=help_parseemph(c, '_', CLI_DEFAULTCOLOR, CLI_UNDERLINE); break;
                 default:
                     printf("%c", *c); break;
             }
@@ -324,7 +325,7 @@ static bool help_displayline(objecthelptopic *topic, lineditor *edit, char *line
 }
 
 /** Displays a help topic */
-void help_display(lineditor *edit, objecthelptopic *topic) {
+void help_display(inline_editor *edit, objecthelptopic *topic) {
     FILE *f = (topic ? fopen(topic->file, "r") : NULL);
     char line[HELP_LINELENGTH];
     
