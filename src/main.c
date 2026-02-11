@@ -17,9 +17,9 @@ int main(int argc, const char * argv[]) {
     clioptions opt = CLI_RUN;
     const char *file = NULL;
     int i=0;
+    bool shouldrun = true;
     
     morpho_initialize();
-    clidebugger_initialize();
     
     /* Process command line arguments */
     for (i=1; i<argc; i++) {
@@ -50,6 +50,16 @@ int main(int argc, const char * argv[]) {
                     }
 #endif
                     break;
+                case 'v': /* Version */
+                    if (strcmp(option, "-version") == 0) {
+                        version morphoversion;
+                        morpho_version(&morphoversion);
+                        char morphoversionstring[VERSION_MAXSTRINGLENGTH];
+                        version_tostring(&morphoversion, VERSION_MAXSTRINGLENGTH, morphoversionstring);
+                        printf("Morpho v%s\n", morphoversionstring);
+                        shouldrun = false;
+                    }
+                    break;
                 case 'w': /* Workers */
                     {
                         const char *c=option+2;
@@ -68,10 +78,14 @@ int main(int argc, const char * argv[]) {
         }
     }
     
-    if (i<argc) morpho_setargs(argc-i-1, argv+i+1); // Pass unprocessed args to the morpho runtime.
-
-    if (file) cli_run(file, opt);
-    else cli(opt);
+    if (shouldrun) {
+        clidebugger_initialize();
+        
+        if (i<argc) morpho_setargs(argc-i-1, argv+i+1); // Pass unprocessed args to the morpho runtime.
+        
+        if (file) cli_run(file, opt);
+        else cli(opt);
+    }
 
     morpho_finalize();
     return 0;
