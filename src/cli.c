@@ -161,7 +161,8 @@ int palette[] = {
     INLINE_YELLOW,    // 1 help
     INLINE_BLUE,      // 2 string/integer/number literals
     INLINE_CYAN,      // 3 symbol
-    INLINE_MAGENTA    // 4 keyword
+    INLINE_MAGENTA,    // 4 keyword
+    INLINE_GRAY_ANSI(12)    // 5 comment (mid-level gray)
 };
 
 tokentype help[] = { TOKEN_QUESTION };
@@ -176,11 +177,57 @@ static bool matchtokentype(tokentype match, size_t n, tokentype *list) {
     return false;
 }
 
+/** Detect and parse comments manually (lexer skips them).
+ * Returns the byte position after the comment, or offset if no comment found. */
+static size_t detect_comment(const char *in, size_t offset) {
+    const char *start = in + offset;
+    
+    // Skip whitespace first
+    const char *p = start;
+    while (*p == ' ' || *p == '\t' || *p == '\r' || *p == '\n') p++;
+    
+    // Check for // style comment
+    if (p[0] == '/' && p[1] == '/') {
+        p += 2; 
+        while (*p != '\0' && *p != '\n' && *p != '\r') p++; // Scan to end of line
+        return p - in;
+    }
+    
+    // Check for /* style comment
+    if (p[0] == '/' && p[1] == '*') {
+        p += 2;
+        int nesting = 1; // Track nesting depth
+        
+        while (nesting > 0 && *p != '\0') {
+            if (p[0] == '/' && p[1] == '*') {
+                nesting++;
+                p += 2;
+            } else if (p[0] == '*' && p[1] == '/') {
+                nesting--;
+                p += 2;
+            } else p++;
+        }
+        return p - in;
+    }
+    
+    return offset; // No comment found
+}
+
 /** A tokenizer for syntax coloring that uses the morpho lexer */
 bool cli_syntaxcolorfn(const char *in, void *ref, size_t offset, inline_colorspan_t *out) {
     bool success=false;
     lexer *l=(lexer *) ref;
     if (!l) return false;
+    
+    // Check for comments first (before lexer processing)
+    size_t comment_end = detect_comment(in, offset);
+    if (comment_end > offset) {
+        // Found a comment
+        out->color = 5; // Comment color (gray)
+        out->byte_end = comment_end;
+        return true; // Successfully colored a comment
+    }
+    
     lex_init(l, in+offset, 0);
     
     token tok;
