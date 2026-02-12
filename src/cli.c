@@ -6,6 +6,7 @@
 
 #include <time.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <ctype.h>
 
 #include "cli.h"
@@ -268,9 +269,115 @@ size_t libgrapheme_graphemefn(const char *in, const char *end) {
  * Interactive mode
  * ********************************************************************** */
 
+
+/** Runtime context holding VM, compiler, program, editor, and lexer */
+typedef struct {
+    vm *v;
+    compiler *c;
+    program *p;
+    inline_editor *edit;
+    lexer l;
+} runtime_t;
+
+/** Forward declaration */
+static void cli_repl(runtime_t *rt, clioptions opt);
+
 /** @brief Provide a command line interface */
 void cli(clioptions opt) {
-    bool tty=inline_checktty();
+    cli_repl(NULL, opt); /* NULL means create new runtime */
+}
+
+/* **********************************************************************
+ * Helper structures and functions
+ * ********************************************************************** */
+
+/** Set up runtime context (VM, compiler, program, editor, callbacks) */
+static runtime_t cli_newruntime(void) {
+    runtime_t rt = { NULL, NULL, NULL, NULL };
+    rt.p = morpho_newprogram();
+    rt.c = morpho_newcompiler(rt.p);
+    rt.v = morpho_newvm();
+    rt.edit = inline_new(CLI_PROMPT);
+    
+    inline_syntaxcolor(rt.edit, cli_syntaxcolorfn, &rt.l);
+    
+    morpho_setinputfn(rt.v, cli_inputcallbackfn, NULL);
+    morpho_setprintfn(rt.v, cli_printcallbackfn, &rt.edit);
+    morpho_setwarningfn(rt.v, cli_warningcallbackfn, &rt.edit);
+    morpho_setdebuggerfn(rt.v, cli_debuggercallbackfn, NULL);
+    
+    return rt;
+}
+
+/** Clean up runtime context */
+static void cli_freeruntime(runtime_t *rt) {
+    if (rt->edit) inline_free(rt->edit);
+    if (rt->v) morpho_freevm(rt->v);
+    if (rt->p) morpho_freeprogram(rt->p);
+    if (rt->c) morpho_freecompiler(rt->c);
+}
+
+
+/** Compile and execute source code */
+static bool cli_compileandrun(runtime_t *rt, const char *src, clioptions opt) {
+    error err;
+    error_init(&err);
+    
+    bool success = morpho_compile((char *)src, rt->c, (opt & CLI_OPTIMIZE), &err);
+    
+    if (success) {
+        if (opt & CLI_DISASSEMBLE) {
+            if (opt & CLI_DISASSEMBLESHOWSRC) {
+                cli_disassemblewithsrc(rt->p, (char *)src);
+            } else {
+                morpho_disassemble(rt->v, rt->p, NULL);
+            }
+        }
+        if (opt & CLI_RUN) {
+            if (opt & CLI_DEBUG) {
+                success = morpho_debug(rt->v, rt->p);
+            } else if (opt & CLI_PROFILE) {
+                success = morpho_profile(rt->v, rt->p);
+            } else {
+                success = morpho_run(rt->v, rt->p);
+            }
+            if (!success) cli_reporterror(morpho_geterror(rt->v), rt->v);
+        }
+    } else {
+        cli_reporterror(&err, rt->v);
+    }
+    
+    return success;
+}
+
+/* **********************************************************************
+ * Non-interactive run
+ * ********************************************************************** */
+
+/** Compile and run source string (no file). Used by -e / --eval. */
+void cli_runstring(const char *src, clioptions opt) {
+    runtime_t rt = cli_newruntime();
+    cli_globalsrc = (char *)src;
+    
+    cli_compileandrun(&rt, src, opt);
+    
+    /* If interactive mode, enter REPL with same VM (cleans up on exit) */
+    if (opt & CLI_INTERACTIVE) {
+        cli_repl(&rt, opt);
+    }
+    cli_freeruntime(&rt);
+}
+
+/** Enter REPL mode, optionally reusing existing runtime */
+static void cli_repl(runtime_t *rt, clioptions opt) {
+    bool own_runtime = (rt == NULL);
+    runtime_t runtime_storage;
+    if (own_runtime) {
+        runtime_storage = cli_newruntime();
+        rt = &runtime_storage;
+    }
+    
+    bool tty = inline_checktty();
     version morphoversion;
     morpho_version(&morphoversion);
     char morphoversionstring[VERSION_MAXSTRINGLENGTH];
@@ -280,153 +387,78 @@ void cli(clioptions opt) {
         inline_setutf8();
         printf("\U0001F98B morpho %s | \U0001F44B Type 'help' or '?' for help\n", morphoversionstring);
     }
-
-    /* Set up program and compiler */
-    program *p = morpho_newprogram();
-    compiler *c = morpho_newcompiler(p);
     
     bool help = help_initialize();
     
-    /* Keep the line by line src as a varray */
     varray_char src;
     varray_charinit(&src);
-    varray_charwrite(&src, '\0'); // Begin with zero string
+    varray_charwrite(&src, '\0');
     
-    /* Set up VM */
-    vm *v = morpho_newvm();
-    
-    /* Line editor */
-    inline_editor *edit = inline_new(CLI_PROMPT);
-    lexer l;
-    inline_setpalette(edit, sizeof(palette)/sizeof(palette[0]), palette);
-    inline_syntaxcolor(edit, cli_syntaxcolorfn, &l);
-    inline_multiline(edit, cli_multiline, NULL, CLI_CONTINUATIONPROMPT);
-    inline_autocomplete(edit, cli_complete, NULL);
+    /* Configure editor for REPL (if not already configured) */
+    inline_setpalette(rt->edit, sizeof(palette)/sizeof(palette[0]), palette);
+    inline_syntaxcolor(rt->edit, cli_syntaxcolorfn, &rt->l);
+    inline_multiline(rt->edit, cli_multiline, NULL, CLI_CONTINUATIONPROMPT);
+    inline_autocomplete(rt->edit, cli_complete, NULL);
 #ifdef CLI_USELIBUNISTRING
-    inline_setgraphemesplitter(&edit, libunistring_graphemefn);
+    inline_setgraphemesplitter(&rt->edit, libunistring_graphemefn);
 #endif
 #ifdef CLI_USELIBGRAPHEME
-    inline_setgraphemesplitter(edit, libgrapheme_graphemefn);
+    inline_setgraphemesplitter(rt->edit, libgrapheme_graphemefn);
 #endif
-
-    morpho_setinputfn(v, cli_inputcallbackfn, NULL);
-    morpho_setprintfn(v, cli_printcallbackfn, &edit);
-    morpho_setwarningfn(v, cli_warningcallbackfn, &edit);
-    morpho_setdebuggerfn(v, cli_debuggercallbackfn, NULL);
     
-    error err; /* Error structure that received messages from the compiler and VM */
-    bool success=false; /* Keep track of whether compilation and execution was successful */
-    
-    /* Initialize the error struct */
+    error err;
     error_init(&err);
-
-    /* Read-evaluate-print loop */
-    for (int n=0;;n++) {
-        if (!tty && n>0) break;
-        char *input=NULL;
+    
+    for (int n = 0; ; n++) {
+        if (!tty && n > 0) break;
+        char *input = NULL;
+        while (!input) input = inline_readline(rt->edit);
         
-        while (!input) input=inline_readline(edit);
-        
-        /* Check for CLI commands. */
-        /* Let the user quit by typing 'quit'. */
-        if (strncmp(input, CLI_QUIT, strlen(CLI_QUIT))==0) {
-			break;
-        } else if (strncmp(input, CLI_HELP, strlen(CLI_HELP))==0) {
-            cli_help(edit, input+strlen(CLI_HELP), &err, help); continue;
-        } else if (strncmp(input, CLI_SHORT_HELP, strlen(CLI_SHORT_HELP))==0) {
-            cli_help(edit, input+strlen(CLI_SHORT_HELP), &err, help); continue;
+        if (strncmp(input, CLI_QUIT, strlen(CLI_QUIT)) == 0) {
+            free(input);
+            break;
+        } else if (strncmp(input, CLI_HELP, strlen(CLI_HELP)) == 0) {
+            cli_help(rt->edit, input + strlen(CLI_HELP), &err, help);
+            free(input);
+            continue;
+        } else if (strncmp(input, CLI_SHORT_HELP, strlen(CLI_SHORT_HELP)) == 0) {
+            cli_help(rt->edit, input + strlen(CLI_SHORT_HELP), &err, help);
+            free(input);
+            continue;
         }
         
-        /* Compile code */
-        success=morpho_compile(input, c, false, &err);
+        bool success = morpho_compile(input, rt->c, false, &err);
         
-        if (success) { /** If compilation was successful, and we're in interactive mode, execute... */
-            /** Retain input in interactive session */
-            src.count--; // Remove zero terminator
-            varray_charadd(&src, input, (int) strlen(input));
+        if (success) {
+            src.count--;
+            varray_charadd(&src, input, (int)strlen(input));
             varray_charwrite(&src, '\n');
-            varray_charwrite(&src, '\0'); // Ensure zero terminated
-            cli_globalsrc=src.data;
+            varray_charwrite(&src, '\0');
+            cli_globalsrc = src.data;
             
             if (opt & CLI_DISASSEMBLE) {
-                morpho_disassemble(v, p, NULL);
+                morpho_disassemble(rt->v, rt->p, NULL);
             }
             if (opt & CLI_RUN) {
-                success=morpho_debug(v, p);
+                success = morpho_debug(rt->v, rt->p);
                 if (!success) {
-                    cli_reporterror(morpho_geterror(v), v);
-                    err=*morpho_geterror(v);
+                    cli_reporterror(morpho_geterror(rt->v), rt->v);
+                    err = *morpho_geterror(rt->v);
                 }
             }
         } else {
-            /** ... otherwise just raise an error. */
-            cli_reporterror(&err, v);
+            cli_reporterror(&err, rt->v);
         }
         
-        if (input) free(input);
+        free(input);
     }
-    
-    inline_free(edit);
-    morpho_freevm(v);
     
     varray_charclear(&src);
-    
     help_finalize();
     
-    morpho_freecompiler(c);
-    morpho_freeprogram(p);
-}
-
-/* **********************************************************************
- * Non-interactive run
- * ********************************************************************** */
-
-/** Compile and run source string (no file). Used by -e / --eval. */
-void cli_runstring(const char *src, clioptions opt) {
-    program *p = morpho_newprogram();
-    compiler *c = morpho_newcompiler(p);
-    vm *v = morpho_newvm();
-
-    inline_editor *edit = inline_new(CLI_PROMPT);
-    lexer l;
-    inline_syntaxcolor(edit, cli_syntaxcolorfn, &l);
-
-    morpho_setinputfn(v, cli_inputcallbackfn, &edit);
-    morpho_setprintfn(v, cli_printcallbackfn, &edit);
-    morpho_setwarningfn(v, cli_warningcallbackfn, &edit);
-    morpho_setdebuggerfn(v, cli_debuggercallbackfn, NULL);
-
-    error err;
-    error_init(&err);
-
-    bool success = morpho_compile((char *) src, c, (opt & CLI_OPTIMIZE), &err);
-
-    if (success) {
-        if (opt & CLI_DISASSEMBLE) {
-            if (opt & CLI_DISASSEMBLESHOWSRC) {
-                cli_disassemblewithsrc(p, (char *)src);
-            } else {
-                morpho_disassemble(v, p, NULL);
-            }
-        }
-        if (opt & CLI_RUN) {
-            if (opt & CLI_DEBUG) {
-                success = morpho_debug(v, p);
-            } else if (opt & CLI_PROFILE) {
-                success = morpho_profile(v, p);
-            } else {
-                success = morpho_run(v, p);
-            }
-            if (!success) cli_reporterror(morpho_geterror(v), v);
-        }
-    } else {
-        cli_reporterror(&err, v);
+    if (own_runtime) {
+        cli_freeruntime(rt);
     }
-
-    inline_free(edit);
-    morpho_freevm(v);
-    morpho_freeprogram(p);
-    morpho_freecompiler(c);
 }
 
 /* **********************************************************************
@@ -434,68 +466,27 @@ void cli_runstring(const char *src, clioptions opt) {
  * ********************************************************************** */
 
 void cli_run(const char *in, clioptions opt) {
-    program *p = morpho_newprogram();
-    compiler *c = morpho_newcompiler(p);
-    vm *v = morpho_newvm();
-    
-    /* Set up line editor for output */
-    inline_editor *edit=inline_new(CLI_PROMPT);
-    lexer l;
-    inline_syntaxcolor(edit, cli_syntaxcolorfn, &l);
-
-    morpho_setinputfn(v, cli_inputcallbackfn, &edit);
-    morpho_setprintfn(v, cli_printcallbackfn, &edit);
-    morpho_setwarningfn(v, cli_warningcallbackfn, &edit);
-    morpho_setdebuggerfn(v, cli_debuggercallbackfn, NULL);
+    runtime_t rt = cli_newruntime();
     
     char *src = cli_loadsource(in);
     if (src) cli_globalsrc = src;
     
-    error err; /* Error structure that received messages from the compiler and VM */
-    error_init(&err);
-
-    bool success=false; /* Keep track of whether compilation and execution was successful */
-    
-    /* Open the input file if provided */
     file_setworkingdirectory(in);
     
     if (src) {
-        /* Compile code */
-        success=morpho_compile(src, c, (opt & CLI_OPTIMIZE), &err);
-        
-        /* Run code if successful */
-        if (success) {
-            if (opt & CLI_DISASSEMBLE) {
-                if (opt & CLI_DISASSEMBLESHOWSRC) {
-                    cli_disassemblewithsrc(p, src);
-                } else {
-                    morpho_disassemble(v, p, NULL);
-                }
-            }
-            if (opt & CLI_RUN) {
-                if (opt & CLI_DEBUG) {
-                    morpho_setdebuggerfn(v, cli_debuggercallbackfn, NULL);
-                    success=morpho_debug(v, p);
-                } else if (opt & CLI_PROFILE) {
-                    success=morpho_profile(v, p);
-                } else {
-                    success=morpho_run(v, p);
-                }
-                if (!success) cli_reporterror(morpho_geterror(v), v);
-            }
-        } else {
-            cli_reporterror(&err, v);
-        }
+        cli_compileandrun(&rt, src, opt);
+        MORPHO_FREE(src);
     } else {
         printf("Could not open file '%s'.\n", in);
+        cli_freeruntime(&rt);
+        return;
     }
     
-    inline_free(edit);
-    
-    MORPHO_FREE(src);
-    morpho_freevm(v);
-    morpho_freeprogram(p);
-    morpho_freecompiler(c);
+    /* If interactive mode, enter REPL with same VM (cleans up on exit) */
+    if (opt & CLI_INTERACTIVE) {
+        cli_repl(&rt, opt);
+    }
+    cli_freeruntime(&rt);
 }
 
 /* **********************************************************************

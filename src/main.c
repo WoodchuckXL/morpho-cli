@@ -169,12 +169,7 @@ int main(int argc, const char *argv[]) {
     if (run) {
         clidebugger_initialize();
         if (i < argc) morpho_setargs(argc - i - 1, argv + i); // Pass unused args to morpho
-        if (file) {
-            cli_run(file, opt);
-            if (opt & CLI_INTERACTIVE) cli(opt); /* Enter REPL after running file */
-        } else {
-            cli(opt);
-        }
+        (file ? cli_run(file, opt) : cli(opt));
     }
 
     morpho_finalize();
