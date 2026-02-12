@@ -8,6 +8,7 @@
 #include <stdbool.h>
 #include <ctype.h>
 #include <string.h>
+#include <limits.h>
 
 #include <morpho.h>
 
@@ -93,8 +94,20 @@ static bool opt_check(const char *opt, const char *arg, clioptions *flags, opt_c
 
 static bool opt_interactive(const char *opt, const char *arg, clioptions *flags, opt_ctx *ctx) {
     (void)opt; (void)arg; (void)ctx;
-    *flags |= CLI_INTERACTIVE; /* Enter REPL after running file */
+    *flags |= CLI_INTERACTIVE; // Enter REPL after running file 
     return true;
+}
+
+static bool opt_list(const char *opt, const char *arg, clioptions *flags, opt_ctx *ctx) {
+    (void)opt; (void)flags; (void)ctx;
+    if (!arg) return false;
+    
+    char *src = cli_loadsource(arg);
+    if (src) {
+        cli_list(src, 1, INT_MAX);
+        MORPHO_FREE(src);
+    } else fprintf(stderr, "morpho: Could not open file '%s'\n", arg);
+    return false; // Don't run program after listing 
 }
 
 static bool opt_eval(const char *opt, const char *arg, clioptions *flags, opt_ctx *ctx) {
@@ -120,6 +133,7 @@ static const option_t opt_table[] = {
     { "-c",       "--check",       false, opt_check },
     { "-e",       "--eval",        true,  opt_eval },
     { "-i",       "--interactive", false, opt_interactive },
+    { "-l",       "--list",        true,  opt_list },
     { "-O",       "--optimize",    false, opt_optimize },
 #ifdef MORPHO_PROFILER
     { "-profile", "--profile",     false, opt_profile },

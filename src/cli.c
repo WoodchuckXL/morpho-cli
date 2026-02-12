@@ -570,6 +570,7 @@ void cli_list(const char *src, int start, int end) {
         if (!edit) return;
         lexer l;
         inline_syntaxcolor(edit, cli_syntaxcolorfn, &l);
+        inline_setpalette(edit, sizeof(palette)/sizeof(palette[0]), palette);
         
         int line=1, length=0;
         for (unsigned int i=0; src[i]!='\0'; i++) {
