@@ -97,8 +97,8 @@ static const option_t opt_table[] = {
 static bool parse_option(const char *arg, clioptions *flags) {
     for (int j = 0; opt_table[j].s || opt_table[j].l; j++) {
         const char *s = opt_table[j].s, *l = opt_table[j].l;
-        if ((s && strcmp(arg, s) == 0) ||
-            (l && strcmp(arg, l) == 0))
+        if ((s && strncmp(arg, s, strlen(s)) == 0) ||
+            (l && strncmp(arg, l, strlen(l)) == 0))
             return opt_table[j].fn(arg, flags);
     }
     printf("Unknown option: '%s'\n", arg);
