@@ -85,6 +85,12 @@ static bool opt_workers(const char *opt, const char *arg, clioptions *flags, opt
     return true;
 }
 
+static bool opt_check(const char *opt, const char *arg, clioptions *flags, opt_ctx *ctx) {
+    (void)opt; (void)arg; (void)ctx;
+    *flags &= ~CLI_RUN; /* Clear RUN flag - compile only, don't execute */
+    return true;
+}
+
 static bool opt_eval(const char *opt, const char *arg, clioptions *flags, opt_ctx *ctx) {
     (void)opt;
     clidebugger_initialize();
@@ -105,6 +111,7 @@ static const option_t opt_table[] = {
     { "-dl",      NULL,            false, opt_disassemblelist },
     { "-d",       "--disassemble", false, opt_disassemble },
     { "-debug",   "--debug",       false, opt_debug },
+    { "-c",       "--check",       false, opt_check },
     { "-e",       "--eval",        true,  opt_eval },
     { "-O",       "--optimize",    false, opt_optimize },
 #ifdef MORPHO_PROFILER
