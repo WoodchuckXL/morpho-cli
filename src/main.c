@@ -14,10 +14,13 @@
 #include "cli.h"
 #include "debugger.h"
 
-/* Option handler: return false to exit without running */
+/** Option handler
+ * @param[in] opt - option to process
+ * @param[out] flags - flags to modify
+ * @returns: control program execution: true to execute program, false if not */
 typedef bool (*optionfn)(const char *opt, clioptions *flags);
 
-static bool opt_version(const char *opt, clioptions *flags) {
+static bool opt_version(const char *opt, clioptions *flags) { // Display version
     version v;
     morpho_version(&v);
     char buf[VERSION_MAXSTRINGLENGTH];
@@ -26,34 +29,34 @@ static bool opt_version(const char *opt, clioptions *flags) {
     return false;
 }
 
-static bool opt_disassembleonly(const char *opt, clioptions *flags) {
+static bool opt_disassembleonly(const char *opt, clioptions *flags) { // Disassemble only
     *flags ^= CLI_RUN;
     *flags |= CLI_DISASSEMBLE;
     return false;
 }
 
-static bool opt_disassemblelist(const char *opt, clioptions *flags) {
+static bool opt_disassemblelist(const char *opt, clioptions *flags) { // Disassemble & list
     *flags |= CLI_DISASSEMBLE | CLI_DISASSEMBLESHOWSRC;
     return true;
 }
 
-static bool opt_disassemble(const char *opt, clioptions *flags) {
+static bool opt_disassemble(const char *opt, clioptions *flags) { // Disassemble before running
     *flags |= CLI_DISASSEMBLE;
     return true;
 }
 
-static bool opt_debug(const char *opt, clioptions *flags) {
+static bool opt_debug(const char *opt, clioptions *flags) { // Enable debugging
     *flags |= CLI_DEBUG;
     return true;
 }
 
-static bool opt_optimize(const char *opt, clioptions *flags) {
+static bool opt_optimize(const char *opt, clioptions *flags) { // Enable optimization
     (void)opt;
     *flags |= CLI_OPTIMIZE;
     return true;
 }
 
-static bool opt_profile(const char *opt, clioptions *flags) {
+static bool opt_profile(const char *opt, clioptions *flags) { // Enable profiling
     (void)opt;
 #ifdef MORPHO_PROFILER
     *flags |= CLI_PROFILE;
@@ -61,7 +64,7 @@ static bool opt_profile(const char *opt, clioptions *flags) {
     return true;
 }
 
-static bool opt_workers(const char *opt, clioptions *flags) {
+static bool opt_workers(const char *opt, clioptions *flags) { // Set number of worker threads
     (void)flags;
     const char *c = opt + 1;
     while (*c && *c != '=' && !isdigit((unsigned char)*c)) c++;
