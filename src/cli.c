@@ -40,6 +40,10 @@ void inline_setutf8(void);
 void inline_emitcolor(int color);
 void inline_emit(const char *seq);
 
+/* **********************************************************************
+ * Utility functions
+ * ********************************************************************** */
+
 void cli_emitemphasis(int emph) {
     switch (emph) {
         case CLI_NOEMPHASIS: inline_emit(RESET); break;
@@ -90,8 +94,30 @@ void cli_reporterror(error *err, vm *v) {
     }
 }
 
+
+/** Interactive help */
+void cli_help(inline_editor *edit, char *query, error *err, bool avail) {
+    char *q=query;
+    if (help_querylength(q, NULL)==0) {
+        if (err->cat!=ERROR_NONE) {
+            q=err->id;
+			error_clear(err);
+        } else {
+            q=HELP_INDEXPAGE;
+        }
+    }
+    
+    objecthelptopic *topic = help_search(q);
+    if (topic) {
+        help_display(edit, topic);
+    } else {
+        while (isspace(*q) && *q!='\0') q++;
+        printf("No help found for '%s'\n", q);
+    }
+}
+
 /* **********************************************************************
- * CLI callbacks
+ * Morpho callbacks
  * ********************************************************************** */
 
 /** Print callback */
@@ -125,11 +151,10 @@ void cli_debuggercallbackfn(vm *v, void *ref) {
 }
 
 /* **********************************************************************
- * Interactive cli
+ * Inline callbacks
  * ********************************************************************** */
 
 /** Define colors for different token types */
-
 int palette[] = {
     CLI_DEFAULTCOLOR, // 0 default
     INLINE_YELLOW,    // 1 help
@@ -225,27 +250,6 @@ bool cli_multiline(const char *in, void *ref) {
     return (nb>0);
 }
 
-/** Interactive help */
-void cli_help(inline_editor *edit, char *query, error *err, bool avail) {
-    char *q=query;
-    if (help_querylength(q, NULL)==0) {
-        if (err->cat!=ERROR_NONE) {
-            q=err->id;
-			error_clear(err);
-        } else {
-            q=HELP_INDEXPAGE;
-        }
-    }
-    
-    objecthelptopic *topic = help_search(q);
-    if (topic) {
-        help_display(edit, topic);
-    } else {
-        while (isspace(*q) && *q!='\0') q++;
-        printf("No help found for '%s'\n", q);
-    }
-}
-
 #ifdef CLI_USELIBUNISTRING
 size_t libunistring_graphemefn(const char *in, const char *end) {
     char *next = (char *) u8_grapheme_next((uint8_t *) in, (uint8_t *) end);
@@ -259,6 +263,10 @@ size_t libgrapheme_graphemefn(const char *in, const char *end) {
     return grapheme_next_character_break_utf8(in, end-in);
 }
 #endif
+
+/* **********************************************************************
+ * Interactive mode
+ * ********************************************************************** */
 
 /** @brief Provide a command line interface */
 void cli(clioptions opt) {
@@ -370,7 +378,7 @@ void cli(clioptions opt) {
 }
 
 /* **********************************************************************
- * Run a file
+ * Non-interactive run
  * ********************************************************************** */
 
 /** Compile and run source string (no file). Used by -e / --eval. */
@@ -421,7 +429,10 @@ void cli_runstring(const char *src, clioptions opt) {
     morpho_freecompiler(c);
 }
 
-/** Loads and runs a file. */
+/* **********************************************************************
+ * Load and run a file
+ * ********************************************************************** */
+
 void cli_run(const char *in, clioptions opt) {
     program *p = morpho_newprogram();
     compiler *c = morpho_newcompiler(p);
