@@ -37,6 +37,7 @@
 #define CLI_DEBUG               (1<<3)
 #define CLI_OPTIMIZE            (1<<4)
 #define CLI_PROFILE             (1<<5)
+#define CLI_INTERACTIVE         (1<<6)
 
 typedef unsigned int clioptions;
 

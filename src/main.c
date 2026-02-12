@@ -91,6 +91,12 @@ static bool opt_check(const char *opt, const char *arg, clioptions *flags, opt_c
     return true;
 }
 
+static bool opt_interactive(const char *opt, const char *arg, clioptions *flags, opt_ctx *ctx) {
+    (void)opt; (void)arg; (void)ctx;
+    *flags |= CLI_INTERACTIVE; /* Enter REPL after running file */
+    return true;
+}
+
 static bool opt_eval(const char *opt, const char *arg, clioptions *flags, opt_ctx *ctx) {
     (void)opt;
     clidebugger_initialize();
@@ -113,6 +119,7 @@ static const option_t opt_table[] = {
     { "-debug",   "--debug",       false, opt_debug },
     { "-c",       "--check",       false, opt_check },
     { "-e",       "--eval",        true,  opt_eval },
+    { "-i",       "--interactive", false, opt_interactive },
     { "-O",       "--optimize",    false, opt_optimize },
 #ifdef MORPHO_PROFILER
     { "-profile", "--profile",     false, opt_profile },
@@ -162,7 +169,12 @@ int main(int argc, const char *argv[]) {
     if (run) {
         clidebugger_initialize();
         if (i < argc) morpho_setargs(argc - i - 1, argv + i); // Pass unused args to morpho
-        (file ? cli_run(file, opt) : cli(opt));
+        if (file) {
+            cli_run(file, opt);
+            if (opt & CLI_INTERACTIVE) cli(opt); /* Enter REPL after running file */
+        } else {
+            cli(opt);
+        }
     }
 
     morpho_finalize();
