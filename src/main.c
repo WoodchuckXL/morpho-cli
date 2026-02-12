@@ -1,90 +1,129 @@
 /** @file main.c
  *  @author T J Atherton
  *
- *  @brief Main entry point
+ *  @brief Main entry point and process options
  */
 
 #include <stdio.h>
-#include <stdarg.h>
+#include <stdbool.h>
 #include <ctype.h>
+#include <string.h>
 
 #include <morpho.h>
 
 #include "cli.h"
 #include "debugger.h"
 
-int main(int argc, const char * argv[]) {
+/* Option handler: return false to exit without running */
+typedef bool (*optionfn)(const char *opt, clioptions *flags);
+
+static bool opt_version(const char *opt, clioptions *flags) {
+    version v;
+    morpho_version(&v);
+    char buf[VERSION_MAXSTRINGLENGTH];
+    version_tostring(&v, VERSION_MAXSTRINGLENGTH, buf);
+    printf("Morpho v%s\n", buf);
+    return false;
+}
+
+static bool opt_disassembleonly(const char *opt, clioptions *flags) {
+    *flags ^= CLI_RUN;
+    *flags |= CLI_DISASSEMBLE;
+    return false;
+}
+
+static bool opt_disassemblelist(const char *opt, clioptions *flags) {
+    *flags |= CLI_DISASSEMBLE | CLI_DISASSEMBLESHOWSRC;
+    return true;
+}
+
+static bool opt_disassemble(const char *opt, clioptions *flags) {
+    *flags |= CLI_DISASSEMBLE;
+    return true;
+}
+
+static bool opt_debug(const char *opt, clioptions *flags) {
+    *flags |= CLI_DEBUG;
+    return true;
+}
+
+static bool opt_optimize(const char *opt, clioptions *flags) {
+    (void)opt;
+    *flags |= CLI_OPTIMIZE;
+    return true;
+}
+
+static bool opt_profile(const char *opt, clioptions *flags) {
+    (void)opt;
+#ifdef MORPHO_PROFILER
+    *flags |= CLI_PROFILE;
+#endif
+    return true;
+}
+
+static bool opt_workers(const char *opt, clioptions *flags) {
+    (void)flags;
+    const char *c = opt + 1;
+    while (*c && *c != '=' && !isdigit((unsigned char)*c)) c++;
+    if (*c == '=') c++;
+    int n = isdigit((unsigned char)*c) ? atoi(c) : 0;
+    if (n < 0) n = 0;
+    morpho_setthreadnumber(n);
+    return true;
+}
+
+typedef struct {
+    const char *s, *l;
+    optionfn fn;
+} option_t;
+
+static const option_t opt_table[] = {
+    { "-D",       NULL,            opt_disassembleonly },
+    { "-dl",      NULL,            opt_disassemblelist },
+    { "-d",       "--disassemble", opt_disassemble },
+    { "-debug",   "--debug",       opt_debug },
+    { "-O",       "--optimize",    opt_optimize },
+#ifdef MORPHO_PROFILER
+    { "-profile", "--profile",     opt_profile },
+#endif
+    { "-v",       "--version",     opt_version },
+    { "-w",       "--workers",     opt_workers },
+    { NULL,       NULL,            NULL },
+};
+
+static bool parse_option(const char *arg, clioptions *flags) {
+    for (int j = 0; opt_table[j].s || opt_table[j].l; j++) {
+        const char *s = opt_table[j].s, *l = opt_table[j].l;
+        if ((s && strcmp(arg, s) == 0) ||
+            (l && strcmp(arg, l) == 0))
+            return opt_table[j].fn(arg, flags);
+    }
+    printf("Unknown option: '%s'\n", arg);
+    return false;
+}
+
+int main(int argc, const char *argv[]) {
     clioptions opt = CLI_RUN;
     const char *file = NULL;
-    int i=0;
-    bool shouldrun = true;
-    
-    morpho_initialize();
-    
-    /* Process command line arguments */
-    for (i=1; i<argc; i++) {
-        const char *option = argv[i];
-        if (argv[i] && option[0]=='-') {
-            switch (option[1]) {
-                case 'D': /* Disassemble only */
-                    opt^=CLI_RUN;
-                    /* v note fallthrough */
-                case 'd':
-                    if (strncmp(option+1, "debug", strlen("debug"))==0) {
-                        opt|=CLI_DEBUG;
-                    } else { /* Disassemble */
-                        opt |= CLI_DISASSEMBLE;
-                        if (option[2]=='l' || option[2]=='L') {
-                            /* Show lines of source alongside disassembly */
-                            opt |= CLI_DISASSEMBLESHOWSRC;
-                        }
-                    }
-                    break;
-                case 'O': /* Optimize */
-                    opt|=CLI_OPTIMIZE;
-                    break;
-                case 'p':
-#ifdef MORPHO_PROFILER
-                    if (strncmp(option+1, "profile", strlen("profile"))==0) {
-                        opt |= CLI_PROFILE;
-                    }
-#endif
-                    break;
-                case 'v': /* Version */
-                    if (strcmp(option, "-version") == 0) {
-                        version morphoversion;
-                        morpho_version(&morphoversion);
-                        char morphoversionstring[VERSION_MAXSTRINGLENGTH];
-                        version_tostring(&morphoversion, VERSION_MAXSTRINGLENGTH, morphoversionstring);
-                        printf("Morpho v%s\n", morphoversionstring);
-                        shouldrun = false;
-                    }
-                    break;
-                case 'w': /* Workers */
-                    {
-                        const char *c=option+2;
-                        int nw=0;
-                        while (!isdigit(*c) && *c!='\0') c++;
-                        if (isdigit(*c)) nw=atoi(c);
-                        if (nw<0) nw=0;
-                        morpho_setthreadnumber(nw);
-                    }
+    int i = 1;
+    bool run = true;
 
-                    break;
-            }
+    morpho_initialize();
+
+    for (; i < argc; i++) { // Process args
+        const char *arg = argv[i];
+        if (arg[0] == '-') {
+            run &= parse_option(arg, &opt);
         } else {
-            file = option;
+            file = arg;
             break;
         }
     }
-    
-    if (shouldrun) {
+
+    if (run) {
         clidebugger_initialize();
-        
-        if (i<argc) morpho_setargs(argc-i-1, argv+i+1); // Pass unprocessed args to the morpho runtime.
-        
-        if (file) cli_run(file, opt);
-        else cli(opt);
+        if (i < argc) morpho_setargs(argc - i - 1, argv + i);
+        (file ? cli_run(file, opt) : cli(opt));
     }
 
     morpho_finalize();
