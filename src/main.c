@@ -36,6 +36,30 @@ static bool opt_version(const char *opt, const char *arg, clioptions *flags, opt
     return false;
 }
 
+static bool opt_help(const char *opt, const char *arg, clioptions *flags, opt_ctx *ctx) {
+    (void)opt; (void)arg; (void)flags; (void)ctx;
+    printf("Usage: morpho6 [options] [file] [options passed to program]\n");
+    printf("\nOptions:\n");
+    printf("  -h, --help              Show this help message\n");
+    printf("  -v, --version           Show version information\n");
+    printf("  -c, --check             Check syntax without executing\n");
+    printf("  -e, --eval <code>       Execute code string\n");
+    printf("  -i, --interactive       Enter REPL after running file\n");
+    printf("  -l, --list <file>       List file with syntax highlighting\n");
+    printf("  -d, --disassemble       Show disassembly\n");
+    printf("  -D                      Disassemble only (no execution)\n");
+    printf("  -dl                     Disassemble with source listing\n");
+    printf("  -debug, --debug         Enable debugger\n");
+    printf("  -O, --optimize          Enable optimizations\n");
+#ifdef MORPHO_PROFILER
+    printf("  -profile, --profile     Enable profiling\n");
+#endif
+    printf("  -w, --workers <n>       Set number of worker threads\n");
+    printf("\nIf no file is specified, morpho enters interactive REPL mode.\n");
+    printf("Any options after the file name are passed to the morpho program.\n");
+    return false;
+}
+
 static bool opt_disassembleonly(const char *opt, const char *arg, clioptions *flags, opt_ctx *ctx) {
     (void)opt; (void)arg; (void)ctx;
     *flags ^= CLI_RUN;
@@ -132,6 +156,7 @@ static const option_t opt_table[] = {
     { "-debug",   "--debug",       false, opt_debug },
     { "-c",       "--check",       false, opt_check },
     { "-e",       "--eval",        true,  opt_eval },
+    { "-h",       "--help",        false, opt_help },
     { "-i",       "--interactive", false, opt_interactive },
     { "-l",       "--list",        true,  opt_list },
     { "-O",       "--optimize",    false, opt_optimize },
