@@ -373,6 +373,54 @@ void cli(clioptions opt) {
  * Run a file
  * ********************************************************************** */
 
+/** Compile and run source string (no file). Used by -e / --eval. */
+void cli_runstring(const char *src, clioptions opt) {
+    program *p = morpho_newprogram();
+    compiler *c = morpho_newcompiler(p);
+    vm *v = morpho_newvm();
+
+    inline_editor *edit = inline_new(CLI_PROMPT);
+    lexer l;
+    inline_syntaxcolor(edit, cli_syntaxcolorfn, &l);
+
+    morpho_setinputfn(v, cli_inputcallbackfn, &edit);
+    morpho_setprintfn(v, cli_printcallbackfn, &edit);
+    morpho_setwarningfn(v, cli_warningcallbackfn, &edit);
+    morpho_setdebuggerfn(v, cli_debuggercallbackfn, NULL);
+
+    error err;
+    error_init(&err);
+
+    bool success = morpho_compile((char *) src, c, (opt & CLI_OPTIMIZE), &err);
+
+    if (success) {
+        if (opt & CLI_DISASSEMBLE) {
+            if (opt & CLI_DISASSEMBLESHOWSRC) {
+                cli_disassemblewithsrc(p, (char *)src);
+            } else {
+                morpho_disassemble(v, p, NULL);
+            }
+        }
+        if (opt & CLI_RUN) {
+            if (opt & CLI_DEBUG) {
+                success = morpho_debug(v, p);
+            } else if (opt & CLI_PROFILE) {
+                success = morpho_profile(v, p);
+            } else {
+                success = morpho_run(v, p);
+            }
+            if (!success) cli_reporterror(morpho_geterror(v), v);
+        }
+    } else {
+        cli_reporterror(&err, v);
+    }
+
+    inline_free(edit);
+    morpho_freevm(v);
+    morpho_freeprogram(p);
+    morpho_freecompiler(c);
+}
+
 /** Loads and runs a file. */
 void cli_run(const char *in, clioptions opt) {
     program *p = morpho_newprogram();
