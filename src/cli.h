@@ -51,6 +51,7 @@ void cli_runstring(const char *src, clioptions opt);
 void cli(clioptions opt);
 
 char *cli_loadsource(const char *in);
+char *cli_loadstdin(void);
 void cli_disassemblewithsrc(program *p, char *src);
 void cli_list(const char *in, int start, int end);
 

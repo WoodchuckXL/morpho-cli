@@ -8,6 +8,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <ctype.h>
+#include <stdarg.h>
 
 #include "cli.h"
 
@@ -26,7 +27,7 @@
 
 char *cli_globalsrc=NULL;
 
-#define CLI_BUFFERSIZE 1024
+#define CLI_BUFFERSIZE 4096
 
 #define BLU   "\x1B[34m"
 #define CYN   "\x1B[36m"
@@ -59,13 +60,16 @@ void cli_emitemphasis(int emph) {
 void cli_displaywithstyle(int col, int emph, int n, ...) {
     va_list args;
     va_start(args, n);
+    bool is_tty = inline_checktty(); // Only emit escape codes if stdout is a TTY 
+    
     for (int i=0; i<n; i++) {
         char *str = va_arg(args, char *);
-        cli_emitemphasis(emph);
-        inline_emitcolor(col);
+        if (is_tty) cli_emitemphasis(emph);
+        if (is_tty) inline_emitcolor(col);
         printf("%s",str);
     }
-    inline_emit(RESET);
+    if (is_tty) inline_emit(RESET);
+    
     va_end(args);
 }
 
@@ -316,7 +320,6 @@ size_t libgrapheme_graphemefn(const char *in, const char *end) {
  * Interactive mode
  * ********************************************************************** */
 
-
 /** Runtime context holding VM, compiler, program, editor, and lexer */
 typedef struct {
     vm *v;
@@ -539,6 +542,25 @@ void cli_run(const char *in, clioptions opt) {
 /* **********************************************************************
  * Load source code
  * ********************************************************************** */
+
+/** Loads source from stdin, returning it as a C-string. Call MORPHO_FREE on it when finished. */
+char *cli_loadstdin(void) {
+    varray_char buffer;
+    varray_charinit(&buffer);
+    
+    /* Read from stdin in chunks */
+    char chunk[CLI_BUFFERSIZE];
+    size_t nread;
+    
+    while ((nread = fread(chunk, 1, sizeof(chunk), stdin)) > 0) {
+        varray_charadd(&buffer, chunk, (int)nread);
+    }
+    
+    /* Ensure null termination */
+    varray_charwrite(&buffer, '\0');
+    
+    return buffer.data;
+}
 
 /** Loads a source file, returning it as a C-string. Call MORPHO_FREE on it when finished. */
 char *cli_loadsource(const char *in) {

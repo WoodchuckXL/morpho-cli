@@ -14,6 +14,7 @@
 
 #include "cli.h"
 #include "debugger.h"
+#include "inline.h"
 
 /** Context passed to option handlers that need argc/argv (e.g. eval). */
 typedef struct {
@@ -56,6 +57,7 @@ static bool opt_help(const char *opt, const char *arg, clioptions *flags, opt_ct
 #endif
     printf("  -w, --workers <n>       Set number of worker threads\n");
     printf("\nIf no file is specified, morpho enters interactive REPL mode.\n");
+    printf("If stdin is piped or redirected, morpho reads and executes from stdin.\n");
     printf("Any options after the file name are passed to the morpho program.\n");
     return false;
 }
@@ -208,7 +210,20 @@ int main(int argc, const char *argv[]) {
     if (run) {
         clidebugger_initialize();
         if (i < argc) morpho_setargs(argc - i - 1, argv + i); // Pass unused args to morpho
-        (file ? cli_run(file, opt) : cli(opt));
+        
+        if (file) {
+            cli_run(file, opt);
+        } else if (!inline_checktty()) {
+            // stdin is piped/redirected - read and execute from stdin
+            char *src = cli_loadstdin();
+            if (src) {
+                cli_runstring(src, opt);
+                MORPHO_FREE(src);
+            }
+        } else {
+            // stdin is a TTY - enter REPL
+            cli(opt);
+        }
     }
 
     morpho_finalize();
