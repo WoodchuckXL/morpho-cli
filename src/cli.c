@@ -41,6 +41,7 @@ char *cli_globalsrc=NULL;
 void inline_setutf8(void);
 void inline_emitcolor(int color);
 void inline_emit(const char *seq);
+bool inline_getterminalwidth(int *width);
 
 /* **********************************************************************
  * Utility functions

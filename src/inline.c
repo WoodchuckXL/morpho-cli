@@ -279,25 +279,31 @@ static bool inline_checksupported(void) {
     return true; // Windows and other terminals are supported
 }
 
-/** Update the terminal width */
-static void inline_updateterminalwidth(inline_editor *edit) {
-    int width = 80; // fallback 
-
+/** Read the width from the terminal */
+bool inline_getterminalwidth(int *width) {
 #ifdef _WIN32
     HANDLE h = GetStdHandle(STD_OUTPUT_HANDLE);
     CONSOLE_SCREEN_BUFFER_INFO csbi;
 
     if (GetConsoleScreenBufferInfo(h, &csbi)) {
-        width = csbi.srWindow.Right - csbi.srWindow.Left + 1;
+        *width=csbi.srWindow.Right - csbi.srWindow.Left + 1;
+        return true;
     }
 #else
     struct winsize ws;
 
     if (ioctl(STDOUT_FILENO, TIOCGWINSZ, &ws) != -1 && ws.ws_col > 0) {
-        width = ws.ws_col;
+        *width=ws.ws_col;
+        return true;
     }
 #endif
+    return false;
+}
 
+/** Update the terminal width */
+static void inline_updateterminalwidth(inline_editor *edit) {
+    int width = 80; // fallback 
+    inline_getterminalwidth(&width);
     edit->ncols = width;
 }
 

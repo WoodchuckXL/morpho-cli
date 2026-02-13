@@ -158,9 +158,12 @@ objecthelptopic *help_search(char *query) {
  * Display help
  * ********************************************************************** */
 
+bool inline_getterminalwidth(int *width);
+
 /** Display a topic list */
 void help_topiclist(dictionary *dict, inline_editor *edit) {
-    int width = 80 /*linedit_getwidth(edit)*/, max = 0;
+    int width = 80, max = 0;
+    inline_getterminalwidth(&width);
     
     objectlist list = MORPHO_STATICLIST;
     varray_valueinit(&list.val);
