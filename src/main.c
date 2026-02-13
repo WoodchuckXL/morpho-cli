@@ -66,7 +66,7 @@ static bool opt_disassembleonly(const char *opt, const char *arg, clioptions *fl
     (void)opt; (void)arg; (void)ctx;
     *flags ^= CLI_RUN;
     *flags |= CLI_DISASSEMBLE;
-    return false;
+    return true;
 }
 
 static bool opt_disassemblelist(const char *opt, const char *arg, clioptions *flags, opt_ctx *ctx) {

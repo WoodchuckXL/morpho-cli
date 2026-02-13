@@ -367,7 +367,6 @@ static void cli_freeruntime(runtime_t *rt) {
     if (rt->c) morpho_freecompiler(rt->c);
 }
 
-
 /** Compile and execute source code */
 static bool cli_compileandrun(runtime_t *rt, const char *src, clioptions opt) {
     error err;
