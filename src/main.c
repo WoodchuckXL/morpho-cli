@@ -55,6 +55,7 @@ static bool opt_help(const char *opt, const char *arg, clioptions *flags, opt_ct
 #ifdef MORPHO_PROFILER
     printf("  -profile, --profile     Enable profiling\n");
 #endif
+    printf("  --no-color              Disable syntax highlighting\n");
     printf("  -w, --workers <n>       Set number of worker threads\n");
     printf("\nIf no file is specified, morpho enters interactive REPL mode.\n");
     printf("If stdin is piped or redirected, morpho reads and executes from stdin.\n");
@@ -112,6 +113,12 @@ static bool opt_workers(const char *opt, const char *arg, clioptions *flags, opt
     return true;
 }
 
+static bool opt_nocolor(const char *opt, const char *arg, clioptions *flags, opt_ctx *ctx) {
+    (void)opt; (void)arg; (void)ctx;
+    *flags |= CLI_NOCOLOR;
+    return true;
+}
+
 static bool opt_check(const char *opt, const char *arg, clioptions *flags, opt_ctx *ctx) {
     (void)opt; (void)arg; (void)ctx;
     *flags &= ~CLI_RUN; /* Clear RUN flag - compile only, don't execute */
@@ -125,12 +132,12 @@ static bool opt_interactive(const char *opt, const char *arg, clioptions *flags,
 }
 
 static bool opt_list(const char *opt, const char *arg, clioptions *flags, opt_ctx *ctx) {
-    (void)opt; (void)flags; (void)ctx;
+    (void)opt; (void)ctx;
     if (!arg) return false;
     
     char *src = cli_loadsource(arg);
     if (src) {
-        cli_list(src, 1, INT_MAX);
+        cli_list(src, 1, INT_MAX, *flags);
         MORPHO_FREE(src);
     } else fprintf(stderr, "morpho: Could not open file '%s'\n", arg);
     return false; // Don't run program after listing 
@@ -165,6 +172,7 @@ static const option_t opt_table[] = {
 #ifdef MORPHO_PROFILER
     { "-profile", "--profile",     false, opt_profile },
 #endif
+    { NULL,       "--no-color",    false, opt_nocolor },
     { "-v",       "--version",     false, opt_version },
     { "-w",       "--workers",     false, opt_workers },
     { NULL,       NULL,            false, NULL },

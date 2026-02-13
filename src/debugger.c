@@ -89,7 +89,7 @@ void clidebugger_list(clidebugger *debug, int *nlines) {
             int start = line - n, end = line + n;
             if (start<0) start = 0;
             
-            cli_list(src, start, end);
+            cli_list(src, start, end, 0); // Use default (color enabled) for debugger
             if (in) MORPHO_FREE(src);
         }
     }

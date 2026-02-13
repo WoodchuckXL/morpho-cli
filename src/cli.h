@@ -38,6 +38,7 @@
 #define CLI_OPTIMIZE            (1<<4)
 #define CLI_PROFILE             (1<<5)
 #define CLI_INTERACTIVE         (1<<6)
+#define CLI_NOCOLOR             (1<<7)
 
 typedef unsigned int clioptions;
 
@@ -52,7 +53,7 @@ void cli(clioptions opt);
 
 char *cli_loadsource(const char *in);
 char *cli_loadstdin(void);
-void cli_disassemblewithsrc(program *p, char *src);
-void cli_list(const char *in, int start, int end);
+void cli_disassemblewithsrc(program *p, char *src, clioptions opt);
+void cli_list(const char *in, int start, int end, clioptions opt);
 
 #endif /* cli_h */

@@ -165,7 +165,7 @@ int palette[] = {
     CLI_DEFAULTCOLOR,                    // 0 default
     INLINE_YELLOW,                       // 1 help
     INLINE_COLOR_ANSI216(0, 1, 5),       // 2 string/integer/number literals (darker blue, visible on both backgrounds)
-    INLINE_COLOR_ANSI216(0, 5, 5),       // 3 symbol (bright cyan/teal, distinct from blue)
+    INLINE_COLOR_ANSI216(0, 3, 4),       // 3 symbol (darker cyan/teal, distinct from blue)
     INLINE_MAGENTA,                      // 4 keyword
     INLINE_GRAY_ANSI(12),                // 5 comment (mid-level gray)
     INLINE_COLOR_ANSI216(5, 3, 0)        // 6 operator (amber)
@@ -355,14 +355,14 @@ void cli(clioptions opt) {
  * ********************************************************************** */
 
 /** Set up runtime context (VM, compiler, program, editor, callbacks) */
-static runtime_t cli_newruntime(void) {
+static runtime_t cli_newruntime(clioptions opt) {
     runtime_t rt = { NULL, NULL, NULL, NULL };
     rt.p = morpho_newprogram();
     rt.c = morpho_newcompiler(rt.p);
     rt.v = morpho_newvm();
     rt.edit = inline_new(CLI_PROMPT);
     
-    inline_syntaxcolor(rt.edit, cli_syntaxcolorfn, &rt.l);
+    if (!(opt & CLI_NOCOLOR)) inline_syntaxcolor(rt.edit, cli_syntaxcolorfn, &rt.l);
     
     morpho_setinputfn(rt.v, cli_inputcallbackfn, NULL);
     morpho_setprintfn(rt.v, cli_printcallbackfn, &rt.edit);
@@ -390,7 +390,7 @@ static bool cli_compileandrun(runtime_t *rt, const char *src, clioptions opt) {
     if (success) {
         if (opt & CLI_DISASSEMBLE) {
             if (opt & CLI_DISASSEMBLESHOWSRC) {
-                cli_disassemblewithsrc(rt->p, (char *)src);
+                cli_disassemblewithsrc(rt->p, (char *)src, opt);
             } else {
                 morpho_disassemble(rt->v, rt->p, NULL);
             }
@@ -418,7 +418,7 @@ static bool cli_compileandrun(runtime_t *rt, const char *src, clioptions opt) {
 
 /** Compile and run source string (no file). Used by -e / --eval. */
 void cli_runstring(const char *src, clioptions opt) {
-    runtime_t rt = cli_newruntime();
+    runtime_t rt = cli_newruntime(opt);
     cli_globalsrc = (char *)src;
     
     cli_compileandrun(&rt, src, opt);
@@ -435,7 +435,7 @@ static void cli_repl(runtime_t *rt, clioptions opt) {
     bool own_runtime = (rt == NULL);
     runtime_t runtime_storage;
     if (own_runtime) {
-        runtime_storage = cli_newruntime();
+        runtime_storage = cli_newruntime(opt);
         rt = &runtime_storage;
     }
     
@@ -458,7 +458,9 @@ static void cli_repl(runtime_t *rt, clioptions opt) {
     
     /* Configure editor for REPL (if not already configured) */
     inline_setpalette(rt->edit, sizeof(palette)/sizeof(palette[0]), palette);
-    inline_syntaxcolor(rt->edit, cli_syntaxcolorfn, &rt->l);
+    if (!(opt & CLI_NOCOLOR)) {
+        inline_syntaxcolor(rt->edit, cli_syntaxcolorfn, &rt->l);
+    }
     inline_multiline(rt->edit, cli_multiline, NULL, CLI_CONTINUATIONPROMPT);
     inline_autocomplete(rt->edit, cli_complete, NULL);
 #ifdef CLI_USELIBUNISTRING
@@ -528,7 +530,7 @@ static void cli_repl(runtime_t *rt, clioptions opt) {
  * ********************************************************************** */
 
 void cli_run(const char *in, clioptions opt) {
-    runtime_t rt = cli_newruntime();
+    runtime_t rt = cli_newruntime(opt);
     
     char *src = cli_loadsource(in);
     if (src) cli_globalsrc = src;
@@ -625,11 +627,13 @@ static void cli_printline(inline_editor *edit, int line, char *prompt, const cha
 }
 
 /** Disassembles the program showing syntax colored lines of source */
-void cli_disassemblewithsrc(program *p, char *src) {
+void cli_disassemblewithsrc(program *p, char *src, clioptions opt) {
     inline_editor *edit = inline_new("");
     if (!edit) return;
     lexer l;
-    inline_syntaxcolor(edit, cli_syntaxcolorfn, &l);
+    if (!(opt & CLI_NOCOLOR)) {
+        inline_syntaxcolor(edit, cli_syntaxcolorfn, &l);
+    }
     
     int line=1, length=0;
     for (unsigned int i=0; src[i]!='\0'; i++) {
@@ -645,13 +649,15 @@ void cli_disassemblewithsrc(program *p, char *src) {
 }
 
 /** Displays a source listing from source lines start to end */
-void cli_list(const char *src, int start, int end) {
+void cli_list(const char *src, int start, int end, clioptions opt) {
     if (src) {
         inline_editor *edit = inline_new("");
         if (!edit) return;
         lexer l;
-        inline_syntaxcolor(edit, cli_syntaxcolorfn, &l);
-        inline_setpalette(edit, sizeof(palette)/sizeof(palette[0]), palette);
+        if (!(opt & CLI_NOCOLOR)) {
+            inline_syntaxcolor(edit, cli_syntaxcolorfn, &l);
+            inline_setpalette(edit, sizeof(palette)/sizeof(palette[0]), palette);
+        }
         
         int line=1, length=0;
         for (unsigned int i=0; src[i]!='\0'; i++) {
