@@ -266,7 +266,7 @@ bool inline_checktty(void) {
 }
 
 /** Check whether the terminal type is supported. */
-static bool inline_checksupported(void) {
+bool inline_checksupported(void) {
 #ifndef _WIN32
     const char *term = getenv("TERM");
     if (!term || !*term) return false;

@@ -42,6 +42,7 @@ void inline_setutf8(void);
 void inline_emit(const char *seq);
 void inline_emitcolor(int color);
 bool inline_getterminalwidth(int *width);
+bool inline_checksupported(void);
 
 /* **********************************************************************
  * Utility functions
@@ -57,11 +58,13 @@ void cli_emitemphasis(int emph) {
     }
 }
 
+bool is_supported = false;
+
 /** Displays several strings with a specified style using linedit */
 void cli_displaywithstyle(int col, int emph, int n, ...) {
     va_list args;
     va_start(args, n);
-    bool is_tty = inline_checktty(); // Only emit escape codes if stdout is a TTY 
+    bool is_tty = inline_checktty() && is_supported; // Only emit escape codes if stdout is a TTY
     
     for (int i=0; i<n; i++) {
         char *str = va_arg(args, char *);
@@ -362,6 +365,7 @@ static runtime_t cli_newruntime(clioptions opt) {
     rt.v = morpho_newvm();
     rt.edit = inline_new(CLI_PROMPT);
     
+    is_supported = inline_checksupported(); // Ensure we are using a supported terminal
     if (!(opt & CLI_NOCOLOR)) inline_syntaxcolor(rt.edit, cli_syntaxcolorfn, &rt.l);
     
     morpho_setinputfn(rt.v, cli_inputcallbackfn, NULL);
