@@ -159,14 +159,14 @@ void cli_debuggercallbackfn(vm *v, void *ref) {
  * Inline callbacks
  * ********************************************************************** */
 
-/** Define colors for different token types */
+/** Define colors for different token types (256-color palette) */
 int palette[] = {
-    CLI_DEFAULTCOLOR, // 0 default
-    INLINE_YELLOW,    // 1 help
-    INLINE_BLUE,      // 2 string/integer/number literals
-    INLINE_CYAN,      // 3 symbol
-    INLINE_MAGENTA,    // 4 keyword
-    INLINE_GRAY_ANSI(12)    // 5 comment (mid-level gray)
+    CLI_DEFAULTCOLOR,                    // 0 default
+    INLINE_YELLOW,                       // 1 help
+    INLINE_COLOR_ANSI216(0, 3, 5),       // 2 string/integer/number literals (sky blue)
+    INLINE_CYAN,                         // 3 symbol
+    INLINE_MAGENTA,                      // 4 keyword
+    INLINE_GRAY_ANSI(12)                 // 5 comment (mid-level gray)
 };
 
 tokentype help[] = { TOKEN_QUESTION };
