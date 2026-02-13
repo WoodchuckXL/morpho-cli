@@ -138,6 +138,7 @@ static bool inline_insert(inline_editor *edit, const char *bytes, size_t nbytes)
 static void inline_clear(inline_editor *edit);
 static void inline_clearselection(inline_editor *edit);
 static void inline_clearsuggestions(inline_editor *edit);
+static bool inline_stringwidth(inline_editor *edit, const char *str, int *width);
 
 /* -----------------------
  * New/free API
@@ -305,6 +306,13 @@ static void inline_updateterminalwidth(inline_editor *edit) {
     int width = 80; // fallback 
     inline_getterminalwidth(&width);
     edit->ncols = width;
+}
+
+/** Update viewport width based on current terminal width (preserves viewport position) */
+static void inline_updateviewportwidth(inline_editor *edit) {
+    int prompt_width; 
+    if (!inline_stringwidth(edit, edit->prompt, &prompt_width)) prompt_width = 0; 
+    edit->viewport.screen_cols = edit->ncols - prompt_width - 1; // Reserve last col to avoid pending wrap state
 }
 
 /* ----------------------------------------
@@ -1112,9 +1120,7 @@ static void inline_initviewport(inline_editor *edit) {
     edit->viewport.first_visible_line = 0;
     edit->viewport.first_visible_col  = 0;
     edit->viewport.screen_rows = 1; // Will adjust for multiline editing later
-    int prompt_width; 
-    if (!inline_stringwidth(edit, edit->prompt, &prompt_width)) prompt_width = 0; 
-    edit->viewport.screen_cols = edit->ncols - prompt_width - 1; // Reserve last col to avoid pending wrap state
+    inline_updateviewportwidth(edit);
 }
 
 /** Compute logical cursor position in rows and columns */
@@ -1468,6 +1474,7 @@ static bool inline_readkeyevent(KEY_EVENT_RECORD *k) {
         if (!ReadConsoleInputW(hIn, &rec, 1, &nread)) return false;
 
         if (rec.EventType == WINDOW_BUFFER_SIZE_EVENT) {
+            resize_pending = 1;
             if (inline_lasteditor) inline_lasteditor->refresh = true;
             continue;
         }
@@ -2103,10 +2110,17 @@ static void inline_supported(inline_editor *edit) {
     while (inline_readkeypress(edit, &key)) {
         if (!inline_processkeypress(edit, &key)) break;
 
-        if (edit->refresh || resize_pending) { 
+        if (resize_pending) {
+            /* Update terminal width and viewport on resize */
+            inline_updateterminalwidth(edit);
+            inline_updateviewportwidth(edit);
+            edit->refresh = true; // Ensure we redraw after resize
+            resize_pending = 0;
+        }
+        
+        if (edit->refresh) { 
             inline_redraw(edit); 
             edit->refresh = false; 
-            resize_pending = 0;
         }
     }
 

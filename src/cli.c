@@ -39,8 +39,8 @@ char *cli_globalsrc=NULL;
 #define UNDERLINE  "\x1B[4m"
 
 void inline_setutf8(void);
-void inline_emitcolor(int color);
 void inline_emit(const char *seq);
+void inline_emitcolor(int color);
 bool inline_getterminalwidth(int *width);
 
 /* **********************************************************************
@@ -164,17 +164,28 @@ void cli_debuggercallbackfn(vm *v, void *ref) {
 int palette[] = {
     CLI_DEFAULTCOLOR,                    // 0 default
     INLINE_YELLOW,                       // 1 help
-    INLINE_COLOR_ANSI216(0, 3, 5),       // 2 string/integer/number literals (sky blue)
-    INLINE_CYAN,                         // 3 symbol
+    INLINE_COLOR_ANSI216(0, 1, 5),       // 2 string/integer/number literals (darker blue, visible on both backgrounds)
+    INLINE_COLOR_ANSI216(0, 5, 5),       // 3 symbol (bright cyan/teal, distinct from blue)
     INLINE_MAGENTA,                      // 4 keyword
-    INLINE_GRAY_ANSI(12)                 // 5 comment (mid-level gray)
+    INLINE_GRAY_ANSI(12),                // 5 comment (mid-level gray)
+    INLINE_COLOR_ANSI216(5, 3, 0)        // 6 operator (amber)
 };
 
 tokentype help[] = { TOKEN_QUESTION };
 tokentype literal[] = { TOKEN_STRING, TOKEN_INTERPOLATION, TOKEN_INTEGER, TOKEN_NUMBER, TOKEN_IMAG };
 tokentype symbols[] = { TOKEN_SYMBOL };
 tokentype keywords[] = { TOKEN_TRUE, TOKEN_FALSE, TOKEN_NIL, TOKEN_SELF, TOKEN_SUPER, TOKEN_PRINT, TOKEN_VAR, TOKEN_IF, TOKEN_ELSE, TOKEN_IN, TOKEN_WHILE, TOKEN_FOR, TOKEN_DO, TOKEN_BREAK, TOKEN_CONTINUE, TOKEN_FUNCTION,
-    TOKEN_RETURN, TOKEN_CLASS, TOKEN_IMPORT, TOKEN_AS, TOKEN_IS, TOKEN_VAR, TOKEN_WITH, TOKEN_TRY, TOKEN_CATCH };
+    TOKEN_RETURN, TOKEN_CLASS, TOKEN_IMPORT, TOKEN_AS, TOKEN_IS, TOKEN_WITH, TOKEN_TRY, TOKEN_CATCH };
+tokentype operators[] = {
+    TOKEN_PLUS, TOKEN_MINUS, TOKEN_STAR, TOKEN_SLASH, TOKEN_CIRCUMFLEX,
+    TOKEN_PLUSPLUS, TOKEN_MINUSMINUS,
+    TOKEN_PLUSEQ, TOKEN_MINUSEQ, TOKEN_STAREQ, TOKEN_SLASHEQ,
+    TOKEN_HASH, TOKEN_AT,
+    TOKEN_EXCLAMATION, TOKEN_AMP, TOKEN_VBAR, TOKEN_DBLAMP, TOKEN_DBLVBAR,
+    TOKEN_EQUAL, TOKEN_EQ, TOKEN_NEQ,
+    TOKEN_LT, TOKEN_GT, TOKEN_LTEQ, TOKEN_GTEQ,
+    TOKEN_DOTDOT, TOKEN_DOTDOTDOT
+};
 
 /** Checks if match matches any tokentype in a given list */
 static bool matchtokentype(tokentype match, size_t n, tokentype *list) {
@@ -249,6 +260,7 @@ bool cli_syntaxcolorfn(const char *in, void *ref, size_t offset, inline_colorspa
             else if (matchtokentype(tok.type, sizeof(literal)/sizeof(literal[0]), literal)) out->color=2;
             else if (matchtokentype(tok.type, sizeof(symbols)/sizeof(symbols[0]), symbols)) out->color=3;
             else if (matchtokentype(tok.type, sizeof(keywords)/sizeof(keywords[0]), keywords)) out->color=4;
+            else if (matchtokentype(tok.type, sizeof(operators)/sizeof(operators[0]), operators)) out->color=6;
         }
         success=(tok.type!=TOKEN_EOF);
     }
