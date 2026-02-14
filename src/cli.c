@@ -121,7 +121,6 @@ void cli_help(inline_editor *edit, char *query, error *err, bool avail) {
 
 /** Print callback */
 void cli_printcallbackfn(vm *v, void *ref, char *string) {
-    inline_editor *l = (inline_editor *) ref;
     cli_displaywithstyle(CLI_DEFAULTCOLOR, CLI_BOLD, 1, string);
 }
 
@@ -279,8 +278,6 @@ const char *cli_complete(const char *in, void *ref, size_t *index) {
     
     /* Now try to match the token against a library of words */
     len=strlen(tok);
-    
-    int success=false;
     
     for (size_t i=*index; words[i]!=NULL; i++) {
         if ( (len<strlen(words[i])) &&
