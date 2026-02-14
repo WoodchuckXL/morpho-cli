@@ -225,6 +225,7 @@ static size_t detect_comment(const char *in, size_t offset) {
 bool cli_syntaxcolorfn(const char *in, void *ref, size_t offset, inline_colorspan_t *out) {
     bool success=false;
     lexer *l=(lexer *) ref;
+    
     if (!l) return false;
     
     // Check for comments first (before lexer processing)
@@ -236,8 +237,9 @@ bool cli_syntaxcolorfn(const char *in, void *ref, size_t offset, inline_colorspa
         return true; // Successfully colored a comment
     }
     
-    lex_init(l, in+offset, 0);
-    
+    if (offset==0) lex_init(l, in, 0);
+    else l->current=in+offset; 
+
     token tok;
     error err;
     error_init(&err);
@@ -257,7 +259,7 @@ bool cli_syntaxcolorfn(const char *in, void *ref, size_t offset, inline_colorspa
         success=(tok.type!=TOKEN_EOF);
     }
     
-    lex_clear(l);
+    if (tok.type==TOKEN_EOF) lex_clear(l);
     
     return success;
 }
