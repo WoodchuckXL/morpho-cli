@@ -52,9 +52,7 @@ static bool opt_help(const char *opt, const char *arg, clioptions *flags, opt_ct
     printf("  -dl                     Disassemble with source listing\n");
     printf("  -debug, --debug         Enable debugger\n");
     printf("  -O, --optimize          Enable optimizations\n");
-#ifdef MORPHO_PROFILER
     printf("  -profile, --profile     Enable profiling\n");
-#endif
     printf("  --no-color              Disable syntax highlighting\n");
     printf("  -w, --workers <n>       Set number of worker threads\n");
     printf("\nIf no file is specified, morpho enters interactive REPL mode.\n");
@@ -96,9 +94,7 @@ static bool opt_optimize(const char *opt, const char *arg, clioptions *flags, op
 
 static bool opt_profile(const char *opt, const char *arg, clioptions *flags, opt_ctx *ctx) {
     (void)opt; (void)arg; (void)ctx;
-#ifdef MORPHO_PROFILER
     *flags |= CLI_PROFILE;
-#endif
     return true;
 }
 
@@ -169,9 +165,7 @@ static const option_t opt_table[] = {
     { "-i",       "--interactive", false, opt_interactive },
     { "-l",       "--list",        true,  opt_list },
     { "-O",       "--optimize",    false, opt_optimize },
-#ifdef MORPHO_PROFILER
     { "-profile", "--profile",     false, opt_profile },
-#endif
     { NULL,       "--no-color",    false, opt_nocolor },
     { "-v",       "--version",     false, opt_version },
     { "-w",       "--workers",     false, opt_workers },
