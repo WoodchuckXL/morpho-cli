@@ -29,26 +29,16 @@ char *cli_globalsrc=NULL;
 
 #define CLI_BUFFERSIZE 4096
 
-#define BLU   "\x1B[34m"
-#define CYN   "\x1B[36m"
-#define GRY   "\x1B[38;2;128;128;128m"
-#define RESET "\x1B[0m"
-
+#define RESET      "\x1B[0m"
 #define BOLD       "\x1B[1m"
 #define ITALIC     "\x1B[3m"
 #define UNDERLINE  "\x1B[4m"
-
-void inline_setutf8(void);
-void inline_emit(const char *seq);
-void inline_emitcolor(int color);
-bool inline_getterminalwidth(int *width);
-bool inline_checksupported(void);
 
 /* **********************************************************************
  * Utility functions
  * ********************************************************************** */
 
-void cli_emitemphasis(int emph) {
+void inline_emitemphasis(int emph) {
     switch (emph) {
         case CLI_NOEMPHASIS: inline_emit(RESET); break;
         case CLI_BOLD: inline_emit(BOLD); break;
@@ -68,7 +58,7 @@ void cli_displaywithstyle(int col, int emph, int n, ...) {
     
     for (int i=0; i<n; i++) {
         char *str = va_arg(args, char *);
-        if (is_tty) cli_emitemphasis(emph);
+        if (is_tty) inline_emitemphasis(emph);
         if (is_tty) inline_emitcolor(col);
         printf("%s",str);
     }
