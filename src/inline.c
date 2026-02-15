@@ -8,6 +8,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <ctype.h>
+#include <limits.h>
 
 #ifdef _WIN32
     #include <windows.h>
@@ -620,6 +621,19 @@ static inline int inline_utf8length(unsigned char b) {
     return 0;                              // Invalid or continuation
 }
 
+/** Decode utf8 into an integer */
+static inline uint32_t inline_utf8decode(const unsigned char *p) {
+    int len = inline_utf8length(*p);
+    switch (len) {
+        case 1: return p[0];
+        case 2: return ((p[0] & 0x1F) << 6) |  (p[1] & 0x3F);
+        case 3: return ((p[0] & 0x0F) << 12) | ((p[1] & 0x3F) << 6) | (p[2] & 0x3F);
+        case 4: return ((p[0] & 0x07) << 18) | ((p[1] & 0x3F) << 12) | ((p[2] & 0x3F) << 6) |  (p[3] & 0x3F);
+        default: break;
+    }
+    return 0;
+}
+
 /** Codepoint definition */
 typedef struct {
     const unsigned char *seq;
@@ -642,12 +656,6 @@ static const codepoint_t suffix_extenders[] = {
     CODEPOINT("\xF0\x9F\x8F\xBF"), // dark skin tone
 };
 static const size_t suffix_count = sizeof(suffix_extenders) / sizeof(suffix_extenders[0]);
-
-/* Joiner codepoints connect the next codepoint into the same grapheme */
-static const codepoint_t joiners[] = {
-    CODEPOINT("\xE2\x80\x8D"),   // ZWJ (U+200D)
-};
-static const size_t joiners_count = sizeof(joiners) / sizeof(joiners[0]);
 #undef CODEPOINT
 
 /** Matches a codepoint against a table of possible matches */
@@ -662,47 +670,80 @@ static size_t inline_matchcodepoint(size_t table_count, const codepoint_t *table
     return 0; // no match
 }
 
-/** Minimal heuristic grapheme splitter */
+static bool inline_isextendedpictographic(uint32_t cp) {
+    if (cp >= 0x1F300 && cp <= 0x1FAFF) return true; // Emoji blocks
+    if (cp >= 0x2600 && cp <= 0x26FF) return true; // Misc symbols
+    if (cp >= 0x2700 && cp <= 0x27BF) return true; // Dingbats
+    if (cp == 0x1F3F3 || cp == 0x1F3F4) return true; // White/black flag
+    return false;
+}
+
+static inline bool inline_isregionalindicator(uint32_t cp) {
+    return (cp >= 0x1F1E6 && cp <= 0x1F1FF);
+}
+
+/** Heuristic grapheme splitter */
 static size_t inline_graphemesplit(const char *in, const char *end) {
     const unsigned char *p = (const unsigned char *)in;
     const unsigned char *uend = (const unsigned char *)end;
     if (p >= uend) return 0;
 
-    // Decode first codepoint
     size_t len = inline_utf8length(*p);
-    if (len == 0) len = 1;
-    if ((size_t)(uend - p) < len) return (size_t)(uend - p);
+    if (len == 0 || (size_t)(uend - p) < len) len = 1;
 
-    const unsigned char *prev = p;   // remember start of previous codepoint
+    uint32_t prev_cp = inline_utf8decode(p); // Set basepoint
+    bool prev_had_vs16 = false;
     p += len;
 
     while (p < uend && *p >= 0xCC && *p <= 0xCF) { // Combining marks
         len = inline_utf8length(*p);
         if (len == 0 || (size_t)(uend - p) < len) break;
-        prev = p;
         p += len;
     }
 
-    do { // Suffix extenders
-        len = inline_matchcodepoint(suffix_count, suffix_extenders, p, uend);
-        if (len) {
-            prev = p;
-            p += len;
-        }
-    } while (len != 0);
-
-    for (;;) { // ZWJ joiners — only join if prev and next are non-ASCII
-        len = inline_matchcodepoint(joiners_count, joiners, p, uend); // Check for ZWJ
+    while ((len = inline_matchcodepoint(suffix_count, suffix_extenders, p, uend)) != 0) {
+        if (len == 3 && p[0]==0xEF && p[1]==0xB8 && p[2]==0x8F) prev_had_vs16 = true; // VS16
         p += len;
-        if (p >= uend || len ==0) break;
+    }
 
-        size_t next_len = inline_utf8length(*p); // Decode next codepoint
+    if (p < uend && inline_isregionalindicator(prev_cp)) { // Regional indicator pair
+        size_t next_len = inline_utf8length(*p);
+        if (next_len > 0 && (size_t)(uend - p) >= next_len) {
+            uint32_t next_cp = inline_utf8decode(p);
+            if (inline_isregionalindicator(next_cp)) {
+                p += next_len;
+                return (size_t)(p - (const unsigned char *)in);
+            }
+        }
+    }
+
+    for (;;) { // ZWJ chains
+        if ((size_t)(uend - p) < 3 || p[0]!=0xE2 || p[1]!=0x80 || p[2]!=0x8D) break; // ZWJ
+        p += 3;
+        if (p >= uend) break;
+
+        size_t next_len = inline_utf8length(*p);
         if (next_len == 0 || (size_t)(uend - p) < next_len) break;
 
-        if (*prev < 0x80 || *p < 0x80) break; // Only join if both sides are non-ASCII
+        uint32_t next_cp = inline_utf8decode(p);
 
-        prev = p;
+        if (!(inline_isextendedpictographic(prev_cp) || prev_had_vs16) ||
+            !inline_isextendedpictographic(next_cp)) break;
+
+        prev_cp = next_cp;         // consume base
+        prev_had_vs16 = false;
         p += next_len;
+
+        while (p < uend && *p >= 0xCC && *p <= 0xCF) { // Combining mark
+            next_len = inline_utf8length(*p);
+            if (next_len == 0 || (size_t)(uend - p) < next_len) break;
+            p += next_len;
+        }
+
+        while ((next_len = inline_matchcodepoint(suffix_count, suffix_extenders, p, uend)) != 0) {
+            if (next_len == 3 && p[0]==0xEF && p[1]==0xB8 && p[2]==0x8F) prev_had_vs16 = true;
+            p += next_len;
+        }
     }
 
     return (size_t)(p - (const unsigned char *)in);
@@ -815,41 +856,36 @@ static void inline_recomputelines(inline_editor *edit) {
 
 /** Check for ZWJ, VS16, keycap */
 static bool inline_checkextenders(const unsigned char *g, size_t len) {
-    for (size_t i = 0; i + 2 < len; i++) {
-        unsigned char a = g[i], b = g[i+1], c = g[i+2];
-        if (a == 0xE2 && b == 0x80 && c == 0x8D) return true;  // ZWJ
-        if (a == 0xEF && b == 0xB8 && c == 0x8F) return true;  // VS16
-        if (a == 0xE2 && b == 0x83 && c == 0xA3) return true;  // keycap
+    for (size_t i = 0; i < len; ) {
+        uint32_t cp = inline_utf8decode(g + i);
+        if (cp == 0x200D || cp == 0xFE0E || cp == 0xFE0F || cp == 0x20E3) return true; // ZWJ, VS15, VS16, Keycap
+        if (cp >= 0x1F3FB && cp <= 0x1F3FF) return true; // Skin tones
+        if (cp >= 0x1F9B0 && cp <= 0x1F9B3) return true; // Hair modifiers
+        i += inline_utf8length(g[i]);
     }
     return false;
 }
 
 /** Predict the display width of a grapheme */
 static int inline_graphemewidth(const char *p, size_t len) {
-    const unsigned char *g = (const unsigned char *) p;
     if (!len) return 0;
-    if (g[0] == '\t') return INLINE_TAB_WIDTH; // Tab
-    if (g[0] < 0x80) return 1; // ASCII fast path
+    const unsigned char *g = (const unsigned char *)p;
+    uint32_t cp = inline_utf8decode(g);
 
-    if (len >= 2 && (g[0] == 0xCC || g[0] == 0xCD)) return 0; // Combining-only grapheme (rare)
-    if (inline_checkextenders(g, len)) return 2; // Check for ZWJ, VS16 and other extenders
-    if (len >= 2 && g[0] == 0xEF && (g[1] == 0xBC || g[1] == 0xBD)) return 2; // Fullwidth forms (U+FF00 block)
-
-    if (len >= 4 && (g[0] & 0xF8) == 0xF0) { // Emoji block (U+1F300–U+1FAFF)
-        if ((g[1] & 0xC0) != 0x80 || (g[2] & 0xC0) != 0x80 || (g[3] & 0xC0) != 0x80) return 1;
-        unsigned cp = ((g[0] & 0x07) << 18) | ((g[1] & 0x3F) << 12) |
-                      ((g[2] & 0x3F) << 6) | (g[3] & 0x3F);
-        if (cp >= 0x1F300 && cp <= 0x1FAFF) return 2;
-    }
-
-    if (len >= 3 && g[0] >= 0xE4 && g[0] <= 0xE9) { // CJK Unified Ideographs (U+4E00–U+9FFF)
-        if ((g[1] & 0xC0) != 0x80 || (g[2] & 0xC0) != 0x80) return 1;
-        unsigned cp = ((g[0] & 0x0F) << 12) | ((g[1] & 0x3F) << 6) | (g[2] & 0x3F);
-        if (cp >= 0x4E00 && cp <= 0x9FFF) return 2;
-    }
-
-    return 1;
+    if (cp == '\t') return INLINE_TAB_WIDTH; // Tab
+    if (cp < 0x80) return 1; // ASCII code
+    if (cp >= 0x0300 && cp <= 0x036F) return 0; // Combining marks
+    if (cp >= 0xAC00 && cp <= 0xD7A3) return 2; // Hangul syllables
+    if (cp >= 0xFF01 && cp <= 0xFF60) return 2; // Fullwidth forms
+    if (cp >= 0xFFE0 && cp <= 0xFFE6) return 2;
+    if (inline_isregionalindicator(cp) && // Regional indicator sequence
+        len > 4 && inline_isregionalindicator(inline_utf8decode(g + inline_utf8length(*g)))) return 2;
+    if (inline_checkextenders(g, len)) return 2; // Emoji extenders (ZWJ, VS16, skin tones, etc.)
+    if (cp >= 0x1F300 && cp <= 0x1FAFF) return 2; // Emoji
+    if (cp >= 0x4E00 && cp <= 0x9FFF) return 2; // CJK Unified Ideographs
+    return 1; // Anything else
 }
+
 
 /** Calculate the display width of a utf8 string using current grapheme splitter/width estimator */
 static bool inline_stringwidth(inline_editor *edit, const char *str, int *width) {
@@ -1379,7 +1415,7 @@ static void inline_renderline(inline_editor *edit, const char *prompt, size_t by
         }
     }
 
-    if (logical_cursor_col >= 0) { // Update cursor position if on this line
+    if (logical_cursor_col >= 0 && rendered_cursor_col) { // Update cursor position if on this line
         if (rendered_cursor_posn >= 0) *rendered_cursor_col = rendered_cursor_posn;
         else *rendered_cursor_col = rendered_width; // cursor at end
     }
@@ -1436,27 +1472,20 @@ void inline_displaywithsyntaxcoloring(inline_editor *edit, const char *string) {
         return;
     }
 
-    size_t offset = 0;
-    while (offset < len) { //
-        inline_colorspan_t span = { .byte_end = offset, .color=-1};
+    inline_reset(edit);
+    edit->viewport.screen_cols=INT_MAX;
+    inline_insert(edit, string, len);
+    inline_recomputegraphemes(edit);
+    inline_recomputelines(edit);
 
-        bool ok = edit->syntax_fn(string, edit->syntax_ref, offset, &span); // Obtain next span
-        if (!ok || span.byte_end <= offset) { // No more spans or broken callback; print the rest uncolored
-            write(STDOUT_FILENO, string + offset, (unsigned int) (len - offset));
-            return;
-        }
-
-        if (span.color < edit->palette_count && span.color >= 0) inline_emitcolor(edit->palette[span.color]);
-        for (size_t i = offset; i < span.byte_end; i++) {
-            if (string[i] == '\t') {
-                for (int t = 0; t < INLINE_TAB_WIDTH; t++) inline_emit(" ");
-            } else write(STDOUT_FILENO, &string[i], 1);
-        }
-
-        inline_emit(TERM_RESETFOREGROUND);
-
-        offset = span.byte_end;
+    for (int i = 0; i < edit->line_count; i++) {
+        size_t byte_start = edit->lines[i], byte_end = edit->lines[i+1];
+        bool is_last = (i == edit->line_count - 1);
+        inline_renderline(edit, "", byte_start, byte_end, -1, is_last, NULL );
+        if (i + 1 < edit->line_count) inline_emit("\n\r"); // Move to next line if not at end
     }
+
+    inline_clear(edit);
     fflush(stdout);
 }
 
@@ -1545,7 +1574,7 @@ static int inline_translatekeypress(const KEY_EVENT_RECORD *k, unsigned char out
     }
 
     // Alt characters
-    int i=0; 
+    int i=0;
     if (mods & (LEFT_ALT_PRESSED | RIGHT_ALT_PRESSED)) {
         out[i++] = '\x1b'; // Prefix character with esc
     }
@@ -1576,7 +1605,7 @@ static int inline_translatekeypress(const KEY_EVENT_RECORD *k, unsigned char out
         }
     }
 
-    return i; // Return 
+    return i; // Return
 }
 
 #endif
@@ -1643,7 +1672,7 @@ static void inline_keypresswithchar(keypress_t *keypress, keytype_t type, char c
 }
 
 /** Decode sequence of characters into a utf8 character */
-static void inline_decode_utf8(unsigned char first, keypress_t *out) {
+static void inline_decodeutf8input(unsigned char first, keypress_t *out) {
     out->nbytes = inline_utf8length(first);
 
     if (!out->nbytes) return; // Invalid first byte or stray continuation
@@ -1685,7 +1714,7 @@ static void inline_decode_escape(keypress_t *out) {
     if (!inline_readraw(&seq[i])) return; // Read byte after esc
 
     if (seq[0] !='[') { // Is this an alt + char combo?
-        inline_decode_utf8(seq[0], out);
+        inline_decodeutf8input(seq[0], out);
         out->type=KEY_ALT; // Override type
         return;
     }
@@ -1743,7 +1772,7 @@ static void inline_decode(const rawinput_t *raw, keypress_t *out) {
         return;
     }
 
-    inline_decode_utf8(b, out); // UTF8
+    inline_decodeutf8input(b, out); // UTF8
 }
 
 /** Obtain a keypress event */
@@ -1896,7 +1925,7 @@ static void inline_right(inline_editor *edit) {
         inline_setcursorposn(edit, edit->cursor_posn + 1);
 }
 
-/** Selection */
+/** Selections */
 static void inline_beginselection(inline_editor *edit) {
     if (edit->selection_posn==INLINE_INVALID) edit->selection_posn = edit->cursor_posn;
 }
@@ -1989,7 +2018,7 @@ static bool inline_processshortcut(inline_editor *edit, char c) {
         case 'C': inline_clear(edit); return false; // exit on Ctrl-C
         case 'D':
             inline_clearselection(edit);
-            inline_deletecurrent(edit); 
+            inline_deletecurrent(edit);
             break;
         case 'E': inline_end(edit); break;
         case 'F': inline_right(edit); break;
@@ -2012,7 +2041,7 @@ static bool inline_processshortcut(inline_editor *edit, char c) {
 
 /** Handle Meta + _ shortcuts; upper case versions indicate Shift + Meta + _ */
 static bool inline_processmeta(inline_editor *edit, const unsigned char *c, int nbytes) {
-    (void) nbytes; 
+    (void) nbytes;
     switch (*c) {
         case 'w': case 'W': inline_copyselection(edit); break;
         default: break;
@@ -2026,20 +2055,17 @@ static bool inline_processkeypress(inline_editor *edit, const keypress_t *key) {
     bool generatesuggestions=true, clearselection=true, endbrowsing=true;
     switch (key->type) {
         case KEY_RETURN:
-            if (!edit->multiline_fn ||
-                !edit->multiline_fn(edit->buffer, edit->multiline_ref)) return false;
+            if (!edit->multiline_fn || !edit->multiline_fn(edit->buffer, edit->multiline_ref)) return false;
         case KEY_CTRL_RETURN: // v fallthrough
             if (!inline_insert(edit, "\n", 1)) return false;
             generatesuggestions = false;  // newline shouldn't trigger suggestion
             break;
-        case KEY_LEFT:   inline_left(edit); break;
+        case KEY_LEFT:          inline_left(edit); break;
         case KEY_RIGHT:
             if (edit->suggestion_shown) {
                 inline_applysuggestion(edit);
                 generatesuggestions = false;
-                break;
-            }
-            inline_right(edit);
+            } else inline_right(edit);
             break;
         case KEY_SHIFT_LEFT:
             inline_beginselection(edit);
@@ -2051,14 +2077,8 @@ static bool inline_processkeypress(inline_editor *edit, const keypress_t *key) {
             inline_right(edit);
             clearselection=false;
             break;
-        case KEY_UP:
-            inline_historykey(edit, -1);
-            endbrowsing=false;
-            break;
-        case KEY_DOWN:
-            inline_historykey(edit, +1);
-            endbrowsing=false;
-            break;
+        case KEY_UP:        inline_historykey(edit, -1); endbrowsing=false; break;
+        case KEY_DOWN:      inline_historykey(edit, +1); endbrowsing=false; break;
         case KEY_HOME:      inline_home(edit);       break;
         case KEY_END:       inline_end(edit);        break;
         case KEY_PAGE_UP:   inline_pageup(edit);     break;
@@ -2076,13 +2096,12 @@ static bool inline_processkeypress(inline_editor *edit, const keypress_t *key) {
                 generatesuggestions=false;
             }
             break;
-        case KEY_CTRL:  return inline_processshortcut(edit, key->c[0]);
-        case KEY_ALT:   return inline_processmeta(edit, key->c, key->nbytes);
+        case KEY_CTRL:      return inline_processshortcut(edit, key->c[0]);
+        case KEY_ALT:       return inline_processmeta(edit, key->c, key->nbytes);
         case KEY_CHARACTER:
             if (!inline_insert(edit, (char *) key->c, key->nbytes)) return false;
             break;
-        case KEY_UNKNOWN:
-            break;
+        case KEY_UNKNOWN:   break;
     }
 
     if (clearselection) inline_clearselection(edit);
@@ -2116,9 +2135,7 @@ static void inline_unsupported(inline_editor *edit) {
     inline_noterminal(edit);
 
     int length = (int)edit->buffer_len - 1; // Strip trailing control characters
-    while (length >= 0 && iscntrl((unsigned char)edit->buffer[length])) {
-        edit->buffer[length--] = '\0';
-    }
+    while (length >= 0 && iscntrl((unsigned char)edit->buffer[length])) edit->buffer[length--] = '\0';
 
     edit->buffer_len = length + 1;
 }
@@ -2165,17 +2182,11 @@ static void inline_supported(inline_editor *edit) {
  *           or NULL on error. */
 char *inline_readline(inline_editor *edit) {
     if (!edit) return NULL;
+    inline_clear(edit);  // Reset buffer
 
-    edit->buffer_len = 0; // Reset buffer
-    edit->buffer[0] = '\0';
-
-    if (!inline_checktty()) {
-        inline_noterminal(edit);
-    } else if (inline_checksupported()) {
-        inline_supported(edit);
-    } else {
-        inline_unsupported(edit);
-    }
+    if (!inline_checktty()) inline_noterminal(edit);
+    else if (inline_checksupported()) inline_supported(edit);
+    else inline_unsupported(edit);
 
     return (edit->buffer ? inline_strdup(edit->buffer) : NULL);
 }

@@ -62,7 +62,7 @@ typedef struct {
 } inline_colorspan_t;
 
 /** @brief Syntax coloring callback function, called repeatedly by
- *         the editor to obtain the next colored span. The span is assumed 
+ *         the editor to obtain the next colored span. The span is assumed
  *         to begin as offset.
  *  @param[in]  utf8    The full buffer encoded as UTF-8 to analyze.
  *  @param[in]  ref     User-supplied reference pointer.
@@ -243,4 +243,3 @@ void inline_emitcolor(int color);
 void inline_displaywithsyntaxcoloring(inline_editor *edit, const char *string);
 
 #endif /* INLINE_H */
-
