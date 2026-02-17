@@ -159,23 +159,20 @@ static void cli_displayline(inline_editor *edit, const char *line) {
     }
 }
 
-/** Print a help_topic to the terminal with highlighting and emphasis. */
-static void cli_helptopic_print(inline_editor *edit, const help_topic *t) {
+/** Display a help_topic to the terminal with highlighting and emphasis. */
+static void cli_displaytopic(inline_editor *edit, const help_topic *t) {
     const md_file *file = t->file;
-    const char *src = file ? file->source : NULL;
-    size_t src_len = file ? file->sourcelen : 0;
+    const char *src = (file ? file->source : NULL);
+    size_t src_len = (file ? file->sourcelen : 0);
     if (!src || t->nblocks == 0) return;
 
     char buf[CLI_BUFFERSIZE];
     for (unsigned int i = 0; i < t->nblocks; i++) {
         const md_block *b = &t->content_blocks[i];
-        size_t start = b->span.start;
-        size_t len = b->span.length;
+        size_t start = b->span.start, len = b->span.length;
         if (start >= src_len) continue;
         if (start + len > src_len) len = src_len - start;
-        if (len >= sizeof(buf)) len = sizeof(buf) - 1;
-        memcpy(buf, src + start, len);
-        buf[len] = '\0';
+        if (!cli_copyspan(src + start, len, buf, sizeof(buf))) continue;
 
         switch (b->type) {
             case MD_BLOCK_HEADER: {
@@ -189,16 +186,14 @@ static void cli_helptopic_print(inline_editor *edit, const help_topic *t) {
                 /* Blank line before code only when previous block is not blank and not code */
                 if (i > 0) {
                     md_blocktype prev = t->content_blocks[i - 1].type;
-                    if (prev != MD_BLOCK_BLANK && prev != MD_BLOCK_CODE)
-                        putchar('\n');
+                    if (prev != MD_BLOCK_BLANK && prev != MD_BLOCK_CODE) putchar('\n');
                 }
                 inline_displaywithsyntaxcoloring(edit, buf);
                 if (len > 0 && buf[len - 1] != '\n') putchar('\n');
                 /* Blank line after code only when next block is not blank and not code */
                 if (i + 1 < t->nblocks) {
                     md_blocktype next = t->content_blocks[i + 1].type;
-                    if (next != MD_BLOCK_BLANK && next != MD_BLOCK_CODE)
-                        putchar('\n');
+                    if (next != MD_BLOCK_BLANK && next != MD_BLOCK_CODE) putchar('\n');
                 }
                 break;
             case MD_BLOCK_PARAGRAPH:
@@ -217,14 +212,11 @@ static void cli_helptopic_print(inline_editor *edit, const help_topic *t) {
                     }
                 }
                 break;
-            case MD_BLOCK_BLANK:
-                putchar('\n');
-                break;
+            case MD_BLOCK_BLANK: putchar('\n'); break;
             case MD_BLOCK_THEMATIC_BREAK:
                 cli_displaywithstyle(CLI_DEFAULTCOLOR, CLI_NOEMPHASIS, 1, "---\n");
                 break;
-            case MD_BLOCK_LINK_DEF:
-                break;
+            case MD_BLOCK_LINK_DEF: break;
         }
     }
 }
@@ -235,7 +227,7 @@ void cli_help(inline_editor *edit, char *query, error *err, bool avail) {
     
     help_topic topic;
     if (morpho_helpastopic(q, &topic)) {
-        cli_helptopic_print(edit, &topic);
+        cli_displaytopic(edit, &topic);
     } else {
         varray_char result;
         varray_charinit(&result);
