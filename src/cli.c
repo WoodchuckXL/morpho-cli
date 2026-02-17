@@ -122,12 +122,9 @@ void cli_help(inline_editor *edit, char *query, error *err, bool avail) {
 /* --- Minimal help: render help_topic with inline highlighting --- */
 
 /** Length of segment between delimiters (excluding closing delim). Returns 0 if no closer. */
-static size_t cli_help_segment(const char *s, char delim) {
-    const char *p = s;
-    while (*p != delim) {
-        if (*p == '\0') return 0;
-        p++;
-    }
+static size_t cli_matchdelimiter(const char *s, char delim) {
+    const char *p;
+    for (p = s; *p != delim; p++) if (*p == '\0') return 0;
     return (size_t)(p - s);
 }
 
@@ -142,7 +139,7 @@ static void cli_help_paraline(inline_editor *edit, const char *line) {
         }
         if (*c == '`') {
             c++;
-            size_t n = cli_help_segment(c, '`');
+            size_t n = cli_matchdelimiter(c, '`');
             if (n > 0 && n < sizeof(buf) - 1) {
                 memcpy(buf, c, n);
                 buf[n] = '\0';
@@ -153,7 +150,7 @@ static void cli_help_paraline(inline_editor *edit, const char *line) {
         } else if (*c == '*' || *c == '_') {
             char delim = *c;
             c++;
-            size_t n = cli_help_segment(c, delim);
+            size_t n = cli_matchdelimiter(c, delim);
             if (n > 0 && n < sizeof(buf) - 1) {
                 memcpy(buf, c, n);
                 buf[n] = '\0';
