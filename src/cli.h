@@ -12,7 +12,7 @@
 #include <common.h>
 
 #include "inline.h"
-#include "help.h"
+#include "hlp.h"
 
 #include "debugger.h"
 

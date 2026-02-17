@@ -1,11 +1,11 @@
-/** @file help.h
+/** @file hlp.h
  *  @author T J Atherton
  *
  *  @brief Interactive help system
 */
 
-#ifndef help_h
-#define help_h
+#ifndef hlp_h
+#define hlp_h
 
 #include <stdio.h>
 
@@ -13,6 +13,8 @@
 #include <object.h>
 
 #include "inline.h"
+
+#ifndef MORPHO_INCLUDE_HELP
 
 extern objecttype objecthelptopictype;
 #define OBJECT_HELPTOPIC objecthelptopictype
@@ -35,7 +37,9 @@ size_t help_querylength(char *query, char **s);
 objecthelptopic *help_search(char *query);
 void help_display(inline_editor *edit, objecthelptopic *topic);
 
-bool help_initialize(void);
-void help_finalize(void); 
+#endif
 
-#endif /* help_h */
+bool hlp_initialize(void);
+void hlp_finalize(void);
+
+#endif /* hlp_h */

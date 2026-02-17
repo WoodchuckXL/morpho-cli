@@ -12,6 +12,8 @@
 
 #include "cli.h"
 
+#include <morpho.h>
+#include <help.h>
 #include <parse.h>
 #include <file.h>
 
@@ -95,6 +97,7 @@ void cli_reporterror(error *err, vm *v) {
 
 
 /** Interactive help */
+#ifndef MORPHO_INCLUDE_HELP
 void cli_help(inline_editor *edit, char *query, error *err, bool avail) {
     char *q=query;
     if (help_querylength(q, NULL)==0) {
@@ -114,6 +117,18 @@ void cli_help(inline_editor *edit, char *query, error *err, bool avail) {
         printf("No help found for '%s'\n", q);
     }
 }
+#else
+void cli_help(inline_editor *edit, char *query, error *err, bool avail) {
+    varray_char result;
+    varray_charinit(&result);
+    
+    morpho_helpastext(query, &result);
+    
+    if (result.count>0) printf("%s", result.data);
+    
+    varray_charclear(&result);
+}
+#endif
 
 /* **********************************************************************
  * Morpho callbacks
@@ -443,7 +458,7 @@ static void cli_repl(runtime_t *rt, clioptions opt) {
         printf("\U0001F98B morpho %s | \U0001F44B Type 'help' or '?' for help\n", morphoversionstring);
     }
     
-    bool help = help_initialize();
+    bool help = hlp_initialize();
     
     varray_char src;
     varray_charinit(&src);
@@ -511,7 +526,7 @@ static void cli_repl(runtime_t *rt, clioptions opt) {
     }
     
     varray_charclear(&src);
-    help_finalize();
+    hlp_finalize();
     
     if (own_runtime) {
         cli_freeruntime(rt);

@@ -1,4 +1,4 @@
-/** @file help.c
+/** @file hlp.c
  *  @author T J Atherton
  *
  *  @brief Interactive help system
@@ -8,6 +8,12 @@
 #include <ctype.h>
 
 #include <morpho.h>
+
+#include "cli.h"
+#include "hlp.h"
+
+#ifndef MORPHO_INCLUDE_HELP
+
 #include <object.h>
 #include <common.h>
 #include <resources.h>
@@ -16,9 +22,6 @@
 __declspec(dllimport) extern objecttype objectstringtype; 
 __declspec(dllimport) extern objecttype objectlisttype; 
 #endif
-
-#include "cli.h"
-#include "help.h"
 
 /** The interactive help system uses a collection of Markdown files, located in
  *  MORPHO_HELPFOLDER, that define available topics. Help files are all
@@ -489,7 +492,7 @@ bool help_findfiles(void) {
 
 /** Initializes the help system
  *  @returns true if help is available */
-bool help_initialize(void) {
+bool hlp_initialize(void) {
     objecthelptopictype=object_addtype(&objecthelptopicdefn);
     
     dictionary_init(&helpdict);
@@ -498,7 +501,7 @@ bool help_initialize(void) {
 }
 
 /** Finalizes the help system */
-void help_finalize(void) {
+void hlp_finalize(void) {
     while (topics) {
         objecthelptopic *c = topics;
         topics = c->next;
@@ -507,3 +510,10 @@ void help_finalize(void) {
     dictionary_freecontents(&helpdict, true, false);
     dictionary_clear(&helpdict);
 }
+
+#else
+
+bool hlp_initialize(void) { return true; }
+void hlp_finalize(void) { }
+
+#endif
