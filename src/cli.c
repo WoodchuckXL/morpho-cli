@@ -136,11 +136,14 @@ static bool cli_copyspan(const char *src, size_t n, char *buf, size_t bufsize) {
     return true;
 }
 
-/** Display one line of paragraph/list text with inline `code`, *bold*, _underline_. Escapes \* \_ \` \\ output the character literally. */
+/** Display one line of paragraph/list text with inline `code`, *bold*, _underline_. Escapes \* \_ \` \\ output the character literally. Leading * is printed as a list bullet. */
 static void cli_displayline(inline_editor *edit, const char *line) {
     char buf[CLI_BUFFERSIZE];
     for (const char *c = line; *c != '\0'; ) {
-        if (*c == '\\' && (c[1] == '*' || c[1] == '_' || c[1] == '`' || c[1] == '\\')) {
+        if (c == line && *c == '*') {
+            putchar('*');
+            c++;
+        } else if (*c == '\\' && (c[1] == '*' || c[1] == '_' || c[1] == '`' || c[1] == '\\')) {
             putchar(c[1]);
             c += 2;
         } else if (*c == '`') {
@@ -183,33 +186,18 @@ static void cli_displaytopic(inline_editor *edit, const help_topic *t) {
                 break;
             }
             case MD_BLOCK_CODE:
-                /* Blank line before code only when previous block is not blank and not code */
-                if (i > 0) {
-                    md_blocktype prev = t->content_blocks[i - 1].type;
-                    if (prev != MD_BLOCK_BLANK && prev != MD_BLOCK_CODE) putchar('\n');
-                }
                 inline_displaywithsyntaxcoloring(edit, buf);
                 if (len > 0 && buf[len - 1] != '\n') putchar('\n');
-                /* Blank line after code only when next block is not blank and not code */
-                if (i + 1 < t->nblocks) {
-                    md_blocktype next = t->content_blocks[i + 1].type;
-                    if (next != MD_BLOCK_BLANK && next != MD_BLOCK_CODE) putchar('\n');
-                }
                 break;
             case MD_BLOCK_PARAGRAPH:
             case MD_BLOCK_LIST:
                 for (char *line = buf; *line; ) {
                     char *eol = strchr(line, '\n');
-                    if (eol) {
-                        *eol = '\0';
-                        cli_displayline(edit, line);
-                        putchar('\n');
-                        line = eol + 1;
-                    } else {
-                        cli_displayline(edit, line);
-                        putchar('\n');
-                        break;
-                    }
+                    if (eol) *eol = '\0';
+                    cli_displayline(edit, line);
+                    putchar('\n');
+                    if (!eol) break;
+                    line = eol + 1;
                 }
                 break;
             case MD_BLOCK_BLANK: putchar('\n'); break;
