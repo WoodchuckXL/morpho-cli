@@ -512,6 +512,104 @@ void hlp_finalize(void) {
 }
 
 #else
+/** New help display functions */
+#define HLP_BUFFERSIZE 4096
+
+/** Length of segment between delimiters (excluding closing delim). Returns 0 if no closer. */
+static size_t hlp_matchdelimiter(const char *s, char delim) {
+    const char *p;
+    for (p = s; *p != delim; p++) if (*p == '\0') return 0;
+    return (size_t)(p - s);
+}
+
+/** Copies span [src, src+n) into buf and null-terminates. Returns true if n < bufsize. */
+static bool hlp_copyspan(const char *src, size_t n, char *buf, size_t bufsize) {
+    if (n >= bufsize) return false;
+    memcpy(buf, src, n);
+    buf[n] = '\0';
+    return true;
+}
+
+/** Display one line of paragraph/list text with inline `code`, *bold*, _underline_. Escapes \* \_ \` \\ output the character literally. */
+static void hlp_displayline(inline_editor *edit, const char *line) {
+    char buf[HLP_BUFFERSIZE];
+    for (const char *c = line; *c != '\0'; ) {
+        if (*c == '\\' && (c[1] == '*' || c[1] == '_' || c[1] == '`' || c[1] == '\\')) {
+            putchar(c[1]);
+            c += 2;
+        } else if (*c == '`') {
+            c++;
+            size_t n = hlp_matchdelimiter(c, '`');
+            if (n > 0 && hlp_copyspan(c, n, buf, sizeof(buf)))
+                inline_displaywithsyntaxcoloring(edit, buf);
+            c += n + 1;
+        } else if (*c == '*' || *c == '_') {
+            char delim = *c; c++;
+            size_t n = hlp_matchdelimiter(c, delim);
+            if (n > 0 && hlp_copyspan(c, n, buf, sizeof(buf)))
+                cli_displaywithstyle(CLI_DEFAULTCOLOR, (delim == '*' ? CLI_BOLD : CLI_UNDERLINE), 1, buf);
+            c += n + 1;
+        } else {
+            putchar(*c);
+            c++;
+        }
+    }
+}
+
+/** Display block content as lines; if prefix is not NULL, print it before each line. */
+static void hlp_displayblocklines(inline_editor *edit, char *buf, const char *prefix) {
+    for (char *line = buf; *line; ) {
+        char *eol = strchr(line, '\n');
+        if (eol) *eol = '\0';
+        if (prefix) fputs(prefix, stdout);
+        hlp_displayline(edit, line);
+        putchar('\n');
+        if (!eol) break;
+        line = eol + 1;
+    }
+}
+
+/** Display a help_topic to the terminal with highlighting and emphasis. */
+void hlp_displaytopic(inline_editor *edit, const help_topic *t) {
+    const md_file *file = t->file;
+    const char *src = (file ? file->source : NULL);
+    size_t src_len = (file ? file->sourcelen : 0);
+    if (!src || t->nblocks == 0) return;
+
+    char buf[HLP_BUFFERSIZE];
+    for (unsigned int i = 0; i < t->nblocks; i++) {
+        const md_block *b = &t->content_blocks[i];
+        size_t start = b->span.start, len = b->span.length;
+        if (start >= src_len) continue;
+        if (start + len > src_len) len = src_len - start;
+        if (!hlp_copyspan(src + start, len, buf, sizeof(buf))) continue;
+
+        switch (b->type) {
+            case MD_BLOCK_HEADER: {
+                const char *title = buf;
+                while (*title == '#' || (*title == ' ' && title < buf + len)) title++;
+                if (*title) cli_displaywithstyle(CLI_DEFAULTCOLOR, CLI_UNDERLINE, 1, title);
+                if (len > 0 && buf[len - 1] != '\n') putchar('\n');
+                break;
+            }
+            case MD_BLOCK_CODE:
+                inline_displaywithsyntaxcoloring(edit, buf);
+                if (len > 0 && buf[len - 1] != '\n') putchar('\n');
+                break;
+            case MD_BLOCK_PARAGRAPH:
+                hlp_displayblocklines(edit, buf, NULL);
+                break;
+            case MD_BLOCK_LIST:
+                hlp_displayblocklines(edit, buf, "* ");
+                break;
+            case MD_BLOCK_BLANK: putchar('\n'); break;
+            case MD_BLOCK_THEMATIC_BREAK:
+                cli_displaywithstyle(CLI_DEFAULTCOLOR, CLI_NOEMPHASIS, 1, "---\n");
+                break;
+            case MD_BLOCK_LINK_DEF: break;
+        }
+    }
+}
 
 bool hlp_initialize(void) { return true; }
 void hlp_finalize(void) { }

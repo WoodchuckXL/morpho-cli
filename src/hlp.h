@@ -37,6 +37,11 @@ size_t help_querylength(char *query, char **s);
 objecthelptopic *help_search(char *query);
 void help_display(inline_editor *edit, objecthelptopic *topic);
 
+#else
+#include <help.h>
+
+void hlp_displaytopic(inline_editor *edit, const help_topic *t);
+
 #endif
 
 bool hlp_initialize(void);
