@@ -7,6 +7,7 @@
 #include <time.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 #include <ctype.h>
 #include <stdarg.h>
 
@@ -118,19 +119,125 @@ void cli_help(inline_editor *edit, char *query, error *err, bool avail) {
     }
 }
 #else
+/* --- Minimal help: render help_topic with inline highlighting --- */
+
+/** Length of segment between delimiters (excluding closing delim). Returns 0 if no closer. */
+static size_t cli_help_segment(const char *s, char delim) {
+    const char *p = s;
+    while (*p != delim) {
+        if (*p == '\0') return 0;
+        p++;
+    }
+    return (size_t)(p - s);
+}
+
+/** Display one line of paragraph/list text with inline `code`, *bold*, _underline_. Escapes \* \_ \` \\ output the character literally. */
+static void cli_help_paraline(inline_editor *edit, const char *line) {
+    char buf[CLI_BUFFERSIZE];
+    for (const char *c = line; *c != '\0'; ) {
+        if (*c == '\\' && (c[1] == '*' || c[1] == '_' || c[1] == '`' || c[1] == '\\')) {
+            putchar(c[1]);
+            c += 2;
+            continue;
+        }
+        if (*c == '`') {
+            c++;
+            size_t n = cli_help_segment(c, '`');
+            if (n > 0 && n < sizeof(buf) - 1) {
+                memcpy(buf, c, n);
+                buf[n] = '\0';
+                inline_displaywithsyntaxcoloring(edit, buf);
+                c += n + 1;
+                continue;
+            }
+        } else if (*c == '*' || *c == '_') {
+            char delim = *c;
+            c++;
+            size_t n = cli_help_segment(c, delim);
+            if (n > 0 && n < sizeof(buf) - 1) {
+                memcpy(buf, c, n);
+                buf[n] = '\0';
+                cli_displaywithstyle(CLI_DEFAULTCOLOR, (delim == '*' ? CLI_BOLD : CLI_UNDERLINE), 1, buf);
+                c += n + 1;
+                continue;
+            }
+        }
+        putchar(*c);
+        c++;
+    }
+}
+
+/** Print a help_topic to the terminal with highlighting and emphasis. */
+static void cli_helptopic_print(inline_editor *edit, const help_topic *t) {
+    const md_file *file = t->file;
+    const char *src = file ? file->source : NULL;
+    size_t src_len = file ? file->sourcelen : 0;
+    if (!src || t->nblocks == 0) return;
+
+    char buf[CLI_BUFFERSIZE];
+    for (unsigned int i = 0; i < t->nblocks; i++) {
+        const md_block *b = &t->content_blocks[i];
+        size_t start = b->span.start;
+        size_t len = b->span.length;
+        if (start >= src_len) continue;
+        if (start + len > src_len) len = src_len - start;
+        if (len >= sizeof(buf)) len = sizeof(buf) - 1;
+        memcpy(buf, src + start, len);
+        buf[len] = '\0';
+
+        switch (b->type) {
+            case MD_BLOCK_HEADER: {
+                const char *title = buf;
+                while (*title == '#' || (*title == ' ' && title < buf + len)) title++;
+                if (*title) cli_displaywithstyle(CLI_DEFAULTCOLOR, CLI_UNDERLINE, 1, title);
+                putchar('\n');
+                break;
+            }
+            case MD_BLOCK_CODE:
+                inline_displaywithsyntaxcoloring(edit, buf);
+                if (len > 0 && buf[len - 1] != '\n') putchar('\n');
+                break;
+            case MD_BLOCK_PARAGRAPH:
+            case MD_BLOCK_LIST:
+                for (char *line = buf; *line; ) {
+                    char *eol = strchr(line, '\n');
+                    if (eol) {
+                        *eol = '\0';
+                        cli_help_paraline(edit, line);
+                        putchar('\n');
+                        line = eol + 1;
+                    } else {
+                        cli_help_paraline(edit, line);
+                        putchar('\n');
+                        break;
+                    }
+                }
+                break;
+            case MD_BLOCK_BLANK:
+                putchar('\n');
+                break;
+            case MD_BLOCK_THEMATIC_BREAK:
+                cli_displaywithstyle(CLI_DEFAULTCOLOR, CLI_NOEMPHASIS, 1, "---\n");
+                break;
+            case MD_BLOCK_LINK_DEF:
+                break;
+        }
+    }
+}
+
 void cli_help(inline_editor *edit, char *query, error *err, bool avail) {
     varray_char result;
     varray_charinit(&result);
-    
+    (void)avail;
+
     help_topic topic;
-    
     if (morpho_helpastopic(query, &topic)) {
-        
-    } else { // Failed so retrieve a hint
+        cli_helptopic_print(edit, &topic);
+    } else {
         help_queryhint(query, &result);
-        if (result.count>0) printf("%s", result.data);
+        if (result.count > 0) printf("%s", result.data);
     }
-    
+    (void)err;
     varray_charclear(&result);
 }
 #endif
