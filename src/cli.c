@@ -128,39 +128,34 @@ static size_t cli_matchdelimiter(const char *s, char delim) {
     return (size_t)(p - s);
 }
 
+/** Copies span [src, src+n) into buf and null-terminates. Returns true if n < bufsize. */
+static bool cli_copyspan(const char *src, size_t n, char *buf, size_t bufsize) {
+    if (n >= bufsize) return false;
+    memcpy(buf, src, n);
+    buf[n] = '\0';
+    return true;
+}
+
 /** Display one line of paragraph/list text with inline `code`, *bold*, _underline_. Escapes \* \_ \` \\ output the character literally. */
-static void cli_help_paraline(inline_editor *edit, const char *line) {
+static void cli_displayline(inline_editor *edit, const char *line) {
     char buf[CLI_BUFFERSIZE];
     for (const char *c = line; *c != '\0'; ) {
         if (*c == '\\' && (c[1] == '*' || c[1] == '_' || c[1] == '`' || c[1] == '\\')) {
             putchar(c[1]);
             c += 2;
-            continue;
-        }
-        if (*c == '`') {
+        } else if (*c == '`') {
             c++;
             size_t n = cli_matchdelimiter(c, '`');
-            if (n > 0 && n < sizeof(buf) - 1) {
-                memcpy(buf, c, n);
-                buf[n] = '\0';
+            if (n > 0 && cli_copyspan(c, n, buf, sizeof(buf)))
                 inline_displaywithsyntaxcoloring(edit, buf);
-                c += n + 1;
-                continue;
-            }
+            c += n + 1;
         } else if (*c == '*' || *c == '_') {
-            char delim = *c;
-            c++;
+            char delim = *c++;
             size_t n = cli_matchdelimiter(c, delim);
-            if (n > 0 && n < sizeof(buf) - 1) {
-                memcpy(buf, c, n);
-                buf[n] = '\0';
+            if (n > 0 && cli_copyspan(c, n, buf, sizeof(buf)))
                 cli_displaywithstyle(CLI_DEFAULTCOLOR, (delim == '*' ? CLI_BOLD : CLI_UNDERLINE), 1, buf);
-                c += n + 1;
-                continue;
-            }
-        }
-        putchar(*c);
-        c++;
+            c += n + 1;
+        } else putchar(*c++);
     }
 }
 
@@ -212,11 +207,11 @@ static void cli_helptopic_print(inline_editor *edit, const help_topic *t) {
                     char *eol = strchr(line, '\n');
                     if (eol) {
                         *eol = '\0';
-                        cli_help_paraline(edit, line);
+                        cli_displayline(edit, line);
                         putchar('\n');
                         line = eol + 1;
                     } else {
-                        cli_help_paraline(edit, line);
+                        cli_displayline(edit, line);
                         putchar('\n');
                         break;
                     }
