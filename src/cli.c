@@ -136,14 +136,11 @@ static bool cli_copyspan(const char *src, size_t n, char *buf, size_t bufsize) {
     return true;
 }
 
-/** Display one line of paragraph/list text with inline `code`, *bold*, _underline_. Escapes \* \_ \` \\ output the character literally. Leading * is printed as a list bullet. */
+/** Display one line of paragraph/list text with inline `code`, *bold*, _underline_. Escapes \* \_ \` \\ output the character literally. */
 static void cli_displayline(inline_editor *edit, const char *line) {
     char buf[CLI_BUFFERSIZE];
     for (const char *c = line; *c != '\0'; ) {
-        if (c == line && *c == '*') {
-            putchar('*');
-            c++;
-        } else if (*c == '\\' && (c[1] == '*' || c[1] == '_' || c[1] == '`' || c[1] == '\\')) {
+        if (*c == '\\' && (c[1] == '*' || c[1] == '_' || c[1] == '`' || c[1] == '\\')) {
             putchar(c[1]);
             c += 2;
         } else if (*c == '`') {
@@ -153,12 +150,28 @@ static void cli_displayline(inline_editor *edit, const char *line) {
                 inline_displaywithsyntaxcoloring(edit, buf);
             c += n + 1;
         } else if (*c == '*' || *c == '_') {
-            char delim = *c++;
+            char delim = *c; c++;
             size_t n = cli_matchdelimiter(c, delim);
             if (n > 0 && cli_copyspan(c, n, buf, sizeof(buf)))
                 cli_displaywithstyle(CLI_DEFAULTCOLOR, (delim == '*' ? CLI_BOLD : CLI_UNDERLINE), 1, buf);
             c += n + 1;
-        } else putchar(*c++);
+        } else {
+            putchar(*c);
+            c++;
+        }
+    }
+}
+
+/** Display block content as lines; if prefix is not NULL, print it before each line. */
+static void cli_displayblocklines(inline_editor *edit, char *buf, const char *prefix) {
+    for (char *line = buf; *line; ) {
+        char *eol = strchr(line, '\n');
+        if (eol) *eol = '\0';
+        if (prefix) fputs(prefix, stdout);
+        cli_displayline(edit, line);
+        putchar('\n');
+        if (!eol) break;
+        line = eol + 1;
     }
 }
 
@@ -190,15 +203,10 @@ static void cli_displaytopic(inline_editor *edit, const help_topic *t) {
                 if (len > 0 && buf[len - 1] != '\n') putchar('\n');
                 break;
             case MD_BLOCK_PARAGRAPH:
+                cli_displayblocklines(edit, buf, NULL);
+                break;
             case MD_BLOCK_LIST:
-                for (char *line = buf; *line; ) {
-                    char *eol = strchr(line, '\n');
-                    if (eol) *eol = '\0';
-                    cli_displayline(edit, line);
-                    putchar('\n');
-                    if (!eol) break;
-                    line = eol + 1;
-                }
+                cli_displayblocklines(edit, buf, "* ");
                 break;
             case MD_BLOCK_BLANK: putchar('\n'); break;
             case MD_BLOCK_THEMATIC_BREAK:
