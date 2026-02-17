@@ -182,7 +182,7 @@ static void cli_displaytopic(inline_editor *edit, const help_topic *t) {
                 const char *title = buf;
                 while (*title == '#' || (*title == ' ' && title < buf + len)) title++;
                 if (*title) cli_displaywithstyle(CLI_DEFAULTCOLOR, CLI_UNDERLINE, 1, title);
-                putchar('\n');
+                if (len > 0 && buf[len - 1] != '\n') putchar('\n');
                 break;
             }
             case MD_BLOCK_CODE:
