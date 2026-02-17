@@ -122,9 +122,14 @@ void cli_help(inline_editor *edit, char *query, error *err, bool avail) {
     varray_char result;
     varray_charinit(&result);
     
-    morpho_helpastext(query, &result);
+    help_topic topic;
     
-    if (result.count>0) printf("%s", result.data);
+    if (morpho_helpastopic(query, &topic)) {
+        
+    } else { // Failed so retrieve a hint
+        help_queryhint(query, &result);
+        if (result.count>0) printf("%s", result.data);
+    }
     
     varray_charclear(&result);
 }
