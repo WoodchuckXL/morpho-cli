@@ -5,6 +5,7 @@
 */
 
 #include <string.h>
+#include <stdlib.h>
 #include <ctype.h>
 
 #include <morpho.h>
@@ -609,6 +610,59 @@ void hlp_displaytopic(inline_editor *edit, const help_topic *t) {
             case MD_BLOCK_LINK_DEF: break;
         }
     }
+}
+
+static int hlp_topicname_cmp(const void *a, const void *b) {
+    const value *va = (const value *) a;
+    const value *vb = (const value *) b;
+    if (!MORPHO_ISSTRING(*va) || !MORPHO_ISSTRING(*vb)) return 0;
+    return strcmp(MORPHO_GETCSTRING(*va), MORPHO_GETCSTRING(*vb));
+}
+
+/** Display a list of topic names (e.g. from morpho_helptopics) in columns. */
+void hlp_displaytopiclist(inline_editor *edit, varray_value *topics) {
+    if (!topics || topics->count == 0) return;
+    cli_displaywithstyle(CLI_DEFAULTCOLOR, CLI_UNDERLINE, 1, "Topics:\n");
+    int width = 80, max = 0;
+    inline_getterminalwidth(&width);
+
+    value *data = topics->data;
+    unsigned int n = topics->count;
+    qsort(data, n, sizeof(value), hlp_topicname_cmp);
+
+    for (unsigned int i = 0; i < n; i++) {
+        if (MORPHO_ISSTRING(data[i])) {
+            int len = (int) MORPHO_GETSTRINGLENGTH(data[i]);
+            if (len > max) max = len;
+        }
+    }
+    if (max == 0) max = 1;
+    int ncols = width / (max + 1);
+    if (ncols < 1) ncols = 1;
+    bool single = (unsigned int) ncols > n;
+
+    varray_char str;
+    varray_charinit(&str);
+    int k = 0;
+    for (unsigned int i = 0; i < n; i++) {
+        if (MORPHO_ISSTRING(data[i])) {
+            varray_charadd(&str, MORPHO_GETCSTRING(data[i]), MORPHO_GETSTRINGLENGTH(data[i]));
+            if (single) {
+                varray_charadd(&str, "  ", 2);
+            } else {
+                for (int j = len; j < max + 1; j++) varray_charwrite(&str, ' ');
+            }
+            k++;
+        }
+        if (k == ncols || i == n - 1) {
+            varray_charwrite(&str, '\n');
+            varray_charwrite(&str, '\0');
+            if (str.count > 0) inline_displaywithsyntaxcoloring(edit, str.data);
+            str.count = 0;
+            k = 0;
+        }
+    }
+    varray_charclear(&str);
 }
 
 bool hlp_initialize(void) { return true; }

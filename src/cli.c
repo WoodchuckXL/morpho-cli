@@ -122,19 +122,29 @@ void cli_help(inline_editor *edit, char *query, error *err, bool avail) {
 void cli_help(inline_editor *edit, char *query, error *err, bool avail) {
     char *q = query;
     while (isspace(*q) && *q!='\0') q++; // Strip any leading space
-    
+    bool blank = (*q == '\0');
+    if (blank) q = "help";
+
     help_topic topic;
     if (morpho_helpastopic(q, &topic)) {
         hlp_displaytopic(edit, &topic);
     } else {
         varray_char result;
         varray_charinit(&result);
-        
+
         help_queryhint(q, &result);
         if (result.count > 0) printf("%s\n", result.data);
         else printf("No help found for '%s'\n", q);
 
         varray_charclear(&result);
+    }
+
+    if (blank) {
+        varray_value list;
+        varray_valueinit(&list);
+        morpho_helptopics(&list);
+        hlp_displaytopiclist(edit, &list);
+        varray_valueclear(&list);
     }
 }
 #endif
