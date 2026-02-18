@@ -122,7 +122,7 @@ void cli_help(inline_editor *edit, char *query, error *err, bool avail) {
 void cli_help(inline_editor *edit, char *query, error *err, bool avail) {
     char *q = query;
     while (isspace(*q) && *q!='\0') q++; // Strip any leading space
-    bool blank = (*q == '\0');
+    bool blank = (*q == '\0'); // Check for blank query
     if (blank) q = "help";
 
     help_topic topic;
@@ -139,7 +139,7 @@ void cli_help(inline_editor *edit, char *query, error *err, bool avail) {
         varray_charclear(&result);
     }
 
-    if (blank) {
+    if (blank) { // Display list of topics
         varray_value list;
         varray_valueinit(&list);
         morpho_helptopics(&list);
@@ -194,7 +194,8 @@ int palette[] = {
     INLINE_COLOR_ANSI216(0, 3, 4),       // 3 symbol (darker cyan/teal, distinct from blue)
     INLINE_MAGENTA,                      // 4 keyword
     INLINE_GRAY_ANSI(12),                // 5 comment (mid-level gray)
-    INLINE_COLOR_ANSI216(5, 3, 0)        // 6 operator (amber)
+    INLINE_COLOR_ANSI216(5, 3, 0),       // 6 operator (amber)
+    CLI_ERRORCOLOR                       // 7 debug breakpoint marker @
 };
 
 tokentype help[] = { TOKEN_QUESTION };
@@ -206,7 +207,7 @@ tokentype operators[] = {
     TOKEN_PLUS, TOKEN_MINUS, TOKEN_STAR, TOKEN_SLASH, TOKEN_CIRCUMFLEX,
     TOKEN_PLUSPLUS, TOKEN_MINUSMINUS,
     TOKEN_PLUSEQ, TOKEN_MINUSEQ, TOKEN_STAREQ, TOKEN_SLASHEQ,
-    TOKEN_HASH, TOKEN_AT,
+    TOKEN_HASH,
     TOKEN_EXCLAMATION, TOKEN_AMP, TOKEN_VBAR, TOKEN_DBLAMP, TOKEN_DBLVBAR,
     TOKEN_EQUAL, TOKEN_EQ, TOKEN_NEQ,
     TOKEN_LT, TOKEN_GT, TOKEN_LTEQ, TOKEN_GTEQ,
@@ -284,7 +285,8 @@ bool cli_syntaxcolorfn(const char *in, void *ref, size_t offset, inline_colorspa
             out->byte_end=tok.start-in;
         } else { // A real token
             out->byte_end=offset+tok.length;
-            if (matchtokentype(tok.type, sizeof(help)/sizeof(help[0]), help)) out->color=1;
+            if (tok.type==TOKEN_AT) out->color=7;  // Debug breakpoint marker in red
+            else if (matchtokentype(tok.type, sizeof(help)/sizeof(help[0]), help)) out->color=1;
             else if (matchtokentype(tok.type, sizeof(literal)/sizeof(literal[0]), literal)) out->color=2;
             else if (matchtokentype(tok.type, sizeof(symbols)/sizeof(symbols[0]), symbols)) out->color=3;
             else if (matchtokentype(tok.type, sizeof(keywords)/sizeof(keywords[0]), keywords)) out->color=4;
