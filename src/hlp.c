@@ -545,7 +545,7 @@ static void hlp_displayline(inline_editor *edit, const char *line) {
             if (n > 0 && hlp_copyspan(c, n, buf, sizeof(buf)))
                 inline_displaywithsyntaxcoloring(edit, buf);
             c += n + 1;
-        } else if (*c == '*' && c[1] == '*') { /* **bold** */
+        } else if (*c == '*' && c[1] == '*') { // **bold** 
             c += 2;
             size_t n = hlp_matchdelimiter(c, '*');
             if (n > 0 && c[n] == '*' && c[n + 1] == '*' && hlp_copyspan(c, n, buf, sizeof(buf))) {
@@ -555,7 +555,7 @@ static void hlp_displayline(inline_editor *edit, const char *line) {
                 putchar(*(c - 2));
                 putchar(*(c - 1));
             }
-        } else if (*c == '*' || *c == '_') { /* *emphasis* or _underline_ */
+        } else if (*c == '*' || *c == '_') { // *italic* or _underline_ 
             char delim = *c; c++;
             size_t n = hlp_matchdelimiter(c, delim);
             if (n > 0 && hlp_copyspan(c, n, buf, sizeof(buf)))
