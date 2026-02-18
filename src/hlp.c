@@ -531,7 +531,8 @@ static bool hlp_copyspan(const char *src, size_t n, char *buf, size_t bufsize) {
     return true;
 }
 
-/** Display one line of paragraph/list text with inline `code`, *bold*, _underline_. Escapes \* \_ \` \\ output the character literally. */
+#define RESET      "\x1B[0m"
+/** Display one line of paragraph/list text with inline `code`, *emphasis*, **bold**, _underline_. Escapes \* \_ \` \\ output the character literally. */
 static void hlp_displayline(inline_editor *edit, const char *line) {
     char buf[HLP_BUFFERSIZE];
     for (const char *c = line; *c != '\0'; ) {
@@ -544,11 +545,21 @@ static void hlp_displayline(inline_editor *edit, const char *line) {
             if (n > 0 && hlp_copyspan(c, n, buf, sizeof(buf)))
                 inline_displaywithsyntaxcoloring(edit, buf);
             c += n + 1;
-        } else if (*c == '*' || *c == '_') {
+        } else if (*c == '*' && c[1] == '*') { /* **bold** */
+            c += 2;
+            size_t n = hlp_matchdelimiter(c, '*');
+            if (n > 0 && c[n] == '*' && c[n + 1] == '*' && hlp_copyspan(c, n, buf, sizeof(buf))) {
+                cli_displaywithstyle(CLI_DEFAULTCOLOR, CLI_BOLD, 1, buf);
+                c += n + 2;
+            } else {
+                putchar(*(c - 2));
+                putchar(*(c - 1));
+            }
+        } else if (*c == '*' || *c == '_') { /* *emphasis* or _underline_ */
             char delim = *c; c++;
             size_t n = hlp_matchdelimiter(c, delim);
             if (n > 0 && hlp_copyspan(c, n, buf, sizeof(buf)))
-                cli_displaywithstyle(CLI_DEFAULTCOLOR, (delim == '*' ? CLI_BOLD : CLI_UNDERLINE), 1, buf);
+                cli_displaywithstyle(CLI_DEFAULTCOLOR, (delim == '*' ? CLI_ITALIC : CLI_UNDERLINE), 1, buf);
             c += n + 1;
         } else {
             putchar(*c);

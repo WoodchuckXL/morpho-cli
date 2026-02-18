@@ -41,7 +41,7 @@ char *cli_globalsrc=NULL;
  * Utility functions
  * ********************************************************************** */
 
-void inline_emitemphasis(int emph) {
+void cli_emitemphasis(int emph) {
     switch (emph) {
         case CLI_NOEMPHASIS: inline_emit(RESET); break;
         case CLI_BOLD: inline_emit(BOLD); break;
@@ -59,13 +59,15 @@ void cli_displaywithstyle(int col, int emph, int n, ...) {
     va_start(args, n);
     bool is_tty = inline_checktty() && is_supported; // Only emit escape codes if stdout is a TTY
     
+    fflush(stdout);
     for (int i=0; i<n; i++) {
         char *str = va_arg(args, char *);
-        if (is_tty) inline_emitemphasis(emph);
-        if (is_tty) inline_emitcolor(col);
-        printf("%s",str);
+        if (is_tty) cli_emitemphasis(emph);
+        if (is_tty) if (col != CLI_DEFAULTCOLOR) inline_emitcolor(col);
+        inline_emit(str);
     }
     if (is_tty) inline_emit(RESET);
+    fflush(stdout);
     
     va_end(args);
 }

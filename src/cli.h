@@ -45,6 +45,7 @@ typedef unsigned int clioptions;
 extern char *cli_globalsrc;
 
 void cli_displaywithstyle(int col, int emph, int n, ...);
+void cli_emitemphasis(int emph);
 void cli_reporterror(error *err, vm *v);
 
 void cli_run(const char *in, clioptions opt);
