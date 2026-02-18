@@ -646,7 +646,9 @@ void hlp_displaytopiclist(inline_editor *edit, varray_value *topics) {
     int k = 0;
     for (unsigned int i = 0; i < n; i++) {
         if (MORPHO_ISSTRING(data[i])) {
-            varray_charadd(&str, MORPHO_GETCSTRING(data[i]), MORPHO_GETSTRINGLENGTH(data[i]));
+            char *s = MORPHO_GETCSTRING(data[i]);
+            int len = (int) MORPHO_GETSTRINGLENGTH(data[i]);
+            varray_charadd(&str, s, len);
             if (single) {
                 varray_charadd(&str, "  ", 2);
             } else {

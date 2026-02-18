@@ -4,6 +4,9 @@
  *  @brief Command line debugger
 */
 
+#include <string.h>
+#include <ctype.h>
+
 #include <compile.h>
 #include <vm.h>
 #include <parse.h>
@@ -579,6 +582,38 @@ bool clidebugger_parse(clidebugger *debug, char *in) {
 }
 
 /* **********************************************************************
+ * Debugger autocomplete
+ * ********************************************************************** */
+
+static const char *debugger_commands[] = {
+    "address", "backtrace", "b", "break", "bt", "c", "clear", "continue",
+    "d", "disassem", "disassemble", "g", "gc", "global", "globals", "garbage",
+    "h", "help", "i", "info", "l", "list", "p", "print", "q", "quit",
+    "reg", "register", "registers", "s", "set", "stack", "step", "t", "trace", "x",
+    NULL
+};
+
+/** Autocomplete callback for debugger vocabulary (commands and sub-commands). */
+static const char *clidebugger_complete(const char *in, void *ref, size_t *index) {
+    (void) ref;
+    size_t len = strlen(in);
+    const char *tok = in + len;
+    while (tok > in && !isspace((unsigned char) *(tok - 1))) tok--;
+    if (tok >= in + len || iscntrl((unsigned char) *tok)) return NULL;
+    size_t toklen = strlen(tok);
+
+    for (size_t i = *index; debugger_commands[i] != NULL; i++) {
+        const char *cmd = debugger_commands[i];
+        size_t cmdlen = strlen(cmd);
+        if (toklen < cmdlen && strncmp(tok, cmd, toklen) == 0) {
+            *index = i + 1;
+            return cmd + toklen;
+        }
+    }
+    return NULL;
+}
+
+/* **********************************************************************
  * Debugger REPL
  * ********************************************************************** */
 
@@ -587,6 +622,7 @@ void clidebugger_enter(vm *v) {
     error_init(&err);
     
     inline_editor *edit = inline_new(DEBUGGER_PROMPT);
+    inline_autocomplete(edit, clidebugger_complete, NULL);
     clidebugger debug;
     clidebugger_init(&debug, v, edit, &err);
     clidebugger_banner(&debug);
