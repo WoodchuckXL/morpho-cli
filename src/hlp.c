@@ -581,6 +581,15 @@ static void hlp_displayblocklines(inline_editor *edit, char *buf, const char *pr
     }
 }
 
+/** Display subtopics for a given topic. */
+static void hlp_displaysubtopics(inline_editor *edit, const help_topic *t) {
+    varray_value subtopics;
+    varray_valueinit(&subtopics);
+    morpho_helpsubtopics(t, &subtopics);
+    if (subtopics.count > 0) hlp_displaytopiclist(edit, &subtopics, HLP_SUBTOPICS_HDR);
+    varray_valueclear(&subtopics);
+}
+
 /** Display a help_topic to the terminal with highlighting and emphasis. */
 void hlp_displaytopic(inline_editor *edit, const help_topic *t) {
     const md_file *file = t->file;
@@ -618,7 +627,12 @@ void hlp_displaytopic(inline_editor *edit, const help_topic *t) {
             case MD_BLOCK_THEMATIC_BREAK:
                 cli_displaywithstyle(CLI_DEFAULTCOLOR, CLI_NOEMPHASIS, 1, "---\n");
                 break;
-            case MD_BLOCK_LINK_DEF: break;
+            case MD_SHOW_SUBTOPICS:
+                hlp_displaysubtopics(edit, t);
+                break;
+            case MD_BLOCK_LINK_DEF: 
+            default:
+                break;
         }
     }
 }
@@ -631,9 +645,9 @@ static int hlp_topicname_cmp(const void *a, const void *b) {
 }
 
 /** Display a list of topic names (e.g. from morpho_helptopics) in columns. */
-void hlp_displaytopiclist(inline_editor *edit, varray_value *topics) {
+void hlp_displaytopiclist(inline_editor *edit, varray_value *topics, const char *heading) {
     if (!topics || topics->count == 0) return;
-    cli_displaywithstyle(CLI_DEFAULTCOLOR, CLI_UNDERLINE, 1, "Topics:\n");
+    if (heading) cli_displaywithstyle(CLI_DEFAULTCOLOR, CLI_UNDERLINE, 1, heading);
     int width = 80, max = 0;
     inline_getterminalwidth(&width);
 

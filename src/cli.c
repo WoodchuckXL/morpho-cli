@@ -145,7 +145,7 @@ void cli_help(inline_editor *edit, char *query, error *err, bool avail) {
         varray_value list;
         varray_valueinit(&list);
         morpho_helptopics(&list);
-        hlp_displaytopiclist(edit, &list);
+        hlp_displaytopiclist(edit, &list, HLP_TOPICS_HDR);
         varray_valueclear(&list);
     }
 }

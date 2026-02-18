@@ -40,9 +40,12 @@ void help_display(inline_editor *edit, objecthelptopic *topic);
 #else
 #include <help.h>
 
+#define HLP_TOPICS_HDR "Topics:\n"
+#define HLP_SUBTOPICS_HDR "Subtopics:\n"
+
 void hlp_displaytopic(inline_editor *edit, const help_topic *t);
 
-void hlp_displaytopiclist(inline_editor *edit, varray_value *topics);
+void hlp_displaytopiclist(inline_editor *edit, varray_value *topics, const char *heading);
 
 #endif
 
