@@ -495,7 +495,7 @@ static void cli_repl(runtime_t *rt, clioptions opt) {
     inline_multiline(rt->edit, cli_multiline, NULL, CLI_CONTINUATIONPROMPT);
     inline_autocomplete(rt->edit, cli_complete, NULL);
 #ifdef CLI_USELIBUNISTRING
-    inline_setgraphemesplitter(&rt->edit, libunistring_graphemefn);
+    inline_setgraphemesplitter(rt->edit, libunistring_graphemefn);
 #endif
 #ifdef CLI_USELIBGRAPHEME
     inline_setgraphemesplitter(rt->edit, libgrapheme_graphemefn);
