@@ -333,8 +333,12 @@ const char *cli_complete(const char *in, void *ref, size_t *index) {
 /** Multiline function */
 bool cli_multiline(const char *in, void *ref) {
     int nb=0;
+    const char *c;
 
-    for (const char *c=in; *c!='\0'; c++) {
+    for (c=in; isspace(*c); c++); // Skip leading whitespace
+    if (*c=='?' || strncmp(c, "help", 4)==0) return false; 
+
+    for (; *c!='\0'; c++) {
         switch (*c) {
             case '(': case '{': case '[': nb+=1; break;
             case ')': case '}': case ']': nb-=1; break;
