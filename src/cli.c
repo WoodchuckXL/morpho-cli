@@ -11,14 +11,16 @@
 #include <ctype.h>
 #include <stdarg.h>
 
-#include "cli.h"
-
 #include <morpho.h>
-#include <help.h>
 #include <parse.h>
 #include <file.h>
 
+#include "cli.h"
 #include "debugger.h"
+
+#ifdef MORPHO_INCLUDE_HELP
+    #include <help.h>
+#endif
 
 #ifdef CLI_USELIBUNISTRING
     #include <unigbrk.h>
