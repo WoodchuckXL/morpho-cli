@@ -10,6 +10,15 @@ set(CMAKE_INSTALL_RPATH_USE_LINK_PATH TRUE)
 add_executable(morpho6 "") 
 
 #-------------------------------------------------------------------------------
+# Process options
+#-------------------------------------------------------------------------------
+
+# Option to disable NAN Boxing
+if(MORPHO_DISABLENANBOXING)
+target_compile_definitions(morpho6 PUBLIC _NO_NAN_BOXING)
+endif() 
+
+#-------------------------------------------------------------------------------
 # Include the morpho library
 #-------------------------------------------------------------------------------
 
