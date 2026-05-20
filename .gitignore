@@ -6,3 +6,4 @@ build-xcode/*
 .vscode/settings.json
 /.vscode
 REVIEW.md
+/dist
