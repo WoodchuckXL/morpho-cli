@@ -43,6 +43,8 @@
 typedef unsigned int clioptions;
 
 extern char *cli_globalsrc;
+void cli_setexitcode(int code);
+int cli_exitcode(void);
 
 void cli_displaywithstyle(int col, int emph, int n, ...);
 void cli_emitemphasis(int emph);
@@ -58,3 +60,5 @@ void cli_disassemblewithsrc(program *p, char *src, clioptions opt);
 void cli_list(const char *in, int start, int end, clioptions opt);
 
 #endif /* cli_h */
+
+

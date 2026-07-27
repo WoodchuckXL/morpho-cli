@@ -31,6 +31,15 @@
 #endif
 
 char *cli_globalsrc=NULL;
+static int s_cli_lastexitcode = EXIT_SUCCESS;
+
+void cli_setexitcode(int code) {
+    s_cli_lastexitcode = code;
+}
+
+int cli_exitcode(void) {
+    return s_cli_lastexitcode;
+}
 
 #define CLI_BUFFERSIZE 4096
 
@@ -77,6 +86,7 @@ void cli_displaywithstyle(int col, int emph, int n, ...) {
 /** Report an error if one has occurred. */
 void cli_reporterror(error *err, vm *v) {
     if (err->cat!=ERROR_NONE) {
+        cli_setexitcode(EXIT_FAILURE);
         cli_displaywithstyle(CLI_ERRORCOLOR, CLI_NOEMPHASIS, 3, "Error '", err->id, "'");
         
         if (ERROR_ISRUNTIMEERROR(*err)) {
@@ -440,10 +450,14 @@ static bool cli_compileandrun(runtime_t *rt, const char *src, clioptions opt) {
             } else {
                 success = morpho_run(rt->v, rt->p);
             }
-            if (!success) cli_reporterror(morpho_geterror(rt->v), rt->v);
+            if (!success) {
+                cli_reporterror(morpho_geterror(rt->v), rt->v);
+                cli_setexitcode(EXIT_FAILURE);
+            }
         }
     } else {
         cli_reporterror(&err, rt->v);
+        cli_setexitcode(EXIT_FAILURE);
     }
     
     return success;
@@ -544,11 +558,13 @@ static void cli_repl(runtime_t *rt, clioptions opt) {
                 success = morpho_debug(rt->v, rt->p);
                 if (!success) {
                     cli_reporterror(morpho_geterror(rt->v), rt->v);
+                    cli_setexitcode(EXIT_FAILURE);
                     err = *morpho_geterror(rt->v);
                 }
             }
         } else {
             cli_reporterror(&err, rt->v);
+            cli_setexitcode(EXIT_FAILURE);
         }
         
         free(input);
@@ -579,6 +595,7 @@ void cli_run(const char *in, clioptions opt) {
         MORPHO_FREE(src);
     } else {
         printf("Could not open file '%s'.\n", in);
+        cli_setexitcode(EXIT_FAILURE);
         cli_freeruntime(&rt);
         return;
     }

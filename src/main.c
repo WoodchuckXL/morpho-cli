@@ -9,6 +9,7 @@
 #include <ctype.h>
 #include <string.h>
 #include <limits.h>
+#include <stdlib.h>
 
 #include <morpho.h>
 
@@ -181,6 +182,7 @@ static bool parse_option(int argc, const char *argv[], int *idx, clioptions *fla
             if (opt_table[j].takes_arg) {
                 if (*idx + 1 >= argc) {
                     fprintf(stderr, "morpho: %s requires an argument.\n", arg);
+                    cli_setexitcode(EXIT_FAILURE);
                     return false;
                 }
                 opt_arg = argv[*idx + 1];
@@ -190,7 +192,8 @@ static bool parse_option(int argc, const char *argv[], int *idx, clioptions *fla
             return opt_table[j].fn(arg, opt_arg, flags, &ctx);
         }
     }
-    printf("Unknown option %s.\n", arg);
+    fprintf(stderr, "morpho: Unknown option %s.\n", arg);
+    cli_setexitcode(EXIT_FAILURE);
     return false;
 }
 
@@ -201,6 +204,7 @@ int main(int argc, const char *argv[]) {
     bool run = true;
 
     morpho_initialize();
+    cli_setexitcode(EXIT_SUCCESS);
 
     for (; i < argc && !file; i++) {
         const char *arg = argv[i];
@@ -229,5 +233,5 @@ int main(int argc, const char *argv[]) {
     }
 
     morpho_finalize();
-    return 0;
+    return cli_exitcode();
 }
