@@ -169,7 +169,8 @@ static bool cli_help(inline_editor *edit, char *query, error *err, bool avail) {
         varray_charclear(&result);
     }
 
-    if (blank) { // Display list of topics
+    /* Index page promises a topic list below; show it for blank or "help". */
+    if (blank || strcmp(q, "help") == 0) {
         varray_value list;
         varray_valueinit(&list);
         morpho_helptopics(&list);
