@@ -39,10 +39,19 @@ static bool opt_version(const char *opt, const char *arg, clioptions *flags, opt
 }
 
 static bool opt_help(const char *opt, const char *arg, clioptions *flags, opt_ctx *ctx) {
-    (void)opt; (void)arg; (void)flags; (void)ctx;
+    (void)opt; (void)arg;
+    /* Optional query: morpho6 --help [topic] looks up built-in language help. */
+    if (ctx && ctx->idx && *ctx->idx + 1 < ctx->argc) {
+        const char *next = ctx->argv[*ctx->idx + 1];
+        if (next && next[0] != '-') {
+            (*ctx->idx)++;
+            cli_helpquery(next, *flags);
+            return false;
+        }
+    }
     printf("Usage: morpho6 [options] [file] [options passed to program]\n");
     printf("\nOptions:\n");
-    printf("  -h, --help              Show this help message\n");
+    printf("  -h, --help [query]      Show this help, or look up a language help topic\n");
     printf("  -v, --version           Show version information\n");
     printf("  -c, --check             Check syntax without executing\n");
     printf("  -e, --eval <code>       Execute code string\n");

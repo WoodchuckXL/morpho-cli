@@ -111,9 +111,10 @@ void cli_reporterror(error *err, vm *v) {
 }
 
 
-/** Interactive help */
+/** Interactive help. Returns true if help was found or a useful hint was shown. */
 #ifndef MORPHO_INCLUDE_HELP
-void cli_help(inline_editor *edit, char *query, error *err, bool avail) {
+static bool cli_help(inline_editor *edit, char *query, error *err, bool avail) {
+    (void)avail;
     char *q=query;
     if (help_querylength(q, NULL)==0) {
         if (err->cat!=ERROR_NONE) {
@@ -127,29 +128,31 @@ void cli_help(inline_editor *edit, char *query, error *err, bool avail) {
     objecthelptopic *topic = help_search(q);
     if (topic) {
         help_display(edit, topic);
-    } else {
-        while (isspace(*q) && *q!='\0') q++;
-        printf("No help found for '%s'\n", q);
+        return true;
     }
+    while (isspace(*q) && *q!='\0') q++;
+    printf("No help found for '%s'\n", q);
+    return false;
 }
 #else
-void cli_help(inline_editor *edit, char *query, error *err, bool avail) {
+static bool cli_help(inline_editor *edit, char *query, error *err, bool avail) {
+    (void)err; (void)avail;
     char *q = query;
     while (isspace(*q) && *q!='\0') q++; // Strip any leading space
     bool blank = (*q == '\0'); // Check for blank query
     if (blank) q = "help";
 
+    bool found = false;
     help_topic topic;
     if (morpho_helpastopic(q, &topic)) {
         hlp_displaytopic(edit, &topic);
+        found = true;
     } else {
         varray_char result;
         varray_charinit(&result);
-
         help_queryhint(q, &result);
         if (result.count > 0) printf("%s\n", result.data);
         else printf("No help found for '%s'\n", q);
-
         varray_charclear(&result);
     }
 
@@ -159,7 +162,9 @@ void cli_help(inline_editor *edit, char *query, error *err, bool avail) {
         morpho_helptopics(&list);
         hlp_displaytopiclist(edit, &list, HLP_TOPICS_HDR);
         varray_valueclear(&list);
+        found = true;
     }
+    return found;
 }
 #endif
 
@@ -724,5 +729,28 @@ void cli_list(const char *src, int start, int end, clioptions opt) {
         }
         inline_free(edit);
     }
+}
+
+/** Look up and display a help topic from the command line. */
+void cli_helpquery(const char *query, clioptions opt) {
+    inline_editor *edit = inline_new("");
+    if (!edit) {
+        cli_setexitcode(EXIT_FAILURE);
+        return;
+    }
+
+    lexer l;
+    if (!(opt & CLI_NOCOLOR)) {
+        inline_syntaxcolor(edit, cli_syntaxcolorfn, &l);
+        inline_setpalette(edit, sizeof(palette)/sizeof(palette[0]), palette);
+    }
+
+    error err;
+    error_init(&err);
+    bool help = hlp_initialize();
+    char *q = query ? (char *) query : (char *) "";
+    if (!cli_help(edit, q, &err, help)) cli_setexitcode(EXIT_FAILURE);
+    hlp_finalize();
+    inline_free(edit);
 }
 

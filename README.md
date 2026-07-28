@@ -32,7 +32,7 @@ into a terminal. The terminal app takes a number of optional arguments:
 
 | Option | Description |
 |--------|-------------|
-| `-h`, `--help` | Show help message |
+| `-h`, `--help [query]` | Show CLI help, or look up a language help topic |
 | `-v`, `--version` | Show version information |
 | `-c`, `--check` | Check syntax without executing |
 | `-e`, `--eval <code>` | Execute a code string |

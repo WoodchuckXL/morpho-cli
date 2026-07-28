@@ -58,6 +58,7 @@ char *cli_loadsource(const char *in);
 char *cli_loadstdin(void);
 void cli_disassemblewithsrc(program *p, char *src, clioptions opt);
 void cli_list(const char *in, int start, int end, clioptions opt);
+void cli_helpquery(const char *query, clioptions opt);
 
 #endif /* cli_h */
 
