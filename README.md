@@ -8,11 +8,7 @@ Like morpho itself, Morpho-cli is released under an MIT license (see the LICENSE
 
 ## Installation
 
-For this release, morpho can be installed on all supported platforms using the homebrew package manager. Alternatively, the program can be installed from source as described below. 
-
-### Install with homebrew
-
-The simplest way to install morpho-cli is through the [homebrew package manager](https://brew.sh). To do so:
+The simplest way to install the morpho terminal app is to use the [homebrew package manager](https://brew.sh). To do so:
 
 1. If not already installed, install homebrew on your machine as described on the [homebrew website](https://brew.sh)
 
@@ -26,7 +22,35 @@ brew install morpho morpho-cli morpho-morphoview morpho-morphopm
 
 If you need to uninstall morpho, simply open a terminal and type `brew uninstall morpho-cli morpho-morphoview morpho`. It's very important to uninstall the homebrew morpho in this way before attempting to install from source as below.
 
-### Install from source
+## Running
+
+To run type, 
+
+    morpho6
+
+into a terminal. The terminal app takes a number of optional arguments:
+
+| Option | Description |
+|--------|-------------|
+| `-h`, `--help` | Show help message |
+| `-v`, `--version` | Show version information |
+| `-c`, `--check` | Check syntax without executing |
+| `-e`, `--eval <code>` | Execute a code string |
+| `-i`, `--interactive` | Enter REPL after running a file |
+| `-l`, `--list <file>` | List a file with syntax highlighting |
+| `-d`, `--disassemble` | Show disassembly |
+| `-D` | Disassemble only (no execution) |
+| `-dl` | Disassemble with source listing |
+| `-debug`, `--debug` | Enable debugger |
+| `-O`, `--optimize` | Enable optimizations |
+| `-profile`, `--profile` | Enable profiling |
+| `--no-color` | Disable syntax highlighting |
+| `-w`, `--workers <n>` | Set number of worker threads |
+
+If no file is specified, morpho enters interactive REPL mode. If stdin is piped or redirected, morpho reads and executes from stdin. Any options after the file name are passed to the morpho program.
+
+
+## Manual install from source
 
 To install, clone this repository:
 
@@ -35,13 +59,8 @@ To install, clone this repository:
 and then,
 
     cd morpho-cli 
-    mkdir build
-    cd build
-    cmake -DCMAKE_BUILD_TYPE=Release ..
-    make install 
+    cmake -S . -B build
+    cmake --build build --config Release
+    sudo cmake --install build --config Release
 
-You may need to use sudo make install.
-
-To run,
-
-    morpho6
+This manual build installs into '/usr/local/bin' by default.
