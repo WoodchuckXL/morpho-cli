@@ -47,8 +47,9 @@ into a terminal. The terminal app takes a number of optional arguments:
 | `--no-color` | Disable syntax highlighting |
 | `-w`, `--workers <n>` | Set number of worker threads |
 
-If no file is specified, morpho enters interactive REPL mode. If stdin is piped or redirected, morpho reads and executes from stdin. Any options after the file name are passed to the morpho program.
+If no file is specified, morpho enters interactive mode. If stdin is piped or redirected, morpho reads and executes from stdin. Any options after the file name are passed to the morpho program and are available from the `System` class:
 
+    var args = System.arguments()
 
 ## Manual install from source
 
