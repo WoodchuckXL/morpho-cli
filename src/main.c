@@ -109,13 +109,15 @@ static bool opt_profile(const char *opt, const char *arg, clioptions *flags, opt
 }
 
 static bool opt_workers(const char *opt, const char *arg, clioptions *flags, opt_ctx *ctx) {
-    const char *c = arg ? arg : (opt + 1);
-    while (*c && *c != '=' && !isdigit((unsigned char)*c)) c++;
-    if (*c == '=') c++;
-    int n = isdigit((unsigned char)*c) ? atoi(c) : 0;
+    (void)opt; (void)flags; (void)ctx;
+    if (!arg || !isdigit((unsigned char)*arg)) {
+        fprintf(stderr, "morpho: -w/--workers requires a number.\n");
+        cli_setexitcode(EXIT_FAILURE);
+        return false;
+    }
+    int n = atoi(arg);
     if (n < 0) n = 0;
     morpho_setthreadnumber(n);
-    (void)flags;
     return true;
 }
 
@@ -167,8 +169,8 @@ typedef struct {
 static const option_t opt_table[] = {
     { "-D",       NULL,            false, opt_disassembleonly },
     { "-dl",      NULL,            false, opt_disassemblelist },
-    { "-d",       "--disassemble", false, opt_disassemble },
     { "-debug",   "--debug",       false, opt_debug },
+    { "-d",       "--disassemble", false, opt_disassemble },
     { "-c",       "--check",       false, opt_check },
     { "-e",       "--eval",        true,  opt_eval },
     { "-h",       "--help",        false, opt_help },
@@ -178,28 +180,56 @@ static const option_t opt_table[] = {
     { "-profile", "--profile",     false, opt_profile },
     { NULL,       "--no-color",    false, opt_nocolor },
     { "-v",       "--version",     false, opt_version },
-    { "-w",       "--workers",     false, opt_workers },
+    { "-w",       "--workers",     true,  opt_workers },
     { NULL,       NULL,            false, NULL },
 };
+
+/** Match argv token to an option name. Exact match, or for options that take an
+ *  argument: name=value, or (short options only) -w4 with the value attached. */
+static bool option_matches(const char *arg, const char *name, bool takes_arg, const char **attached) {
+    if (!name) return false;
+    size_t n = strlen(name);
+    if (strncmp(arg, name, n) != 0) return false;
+    if (arg[n] == '\0') {
+        *attached = NULL;
+        return true;
+    }
+    if (!takes_arg) return false;
+    if (arg[n] == '=') {
+        *attached = arg + n + 1;
+        return true;
+    }
+    /* Short option with attached value, e.g. -w4 */
+    if (name[0] == '-' && name[1] != '-' && isdigit((unsigned char)arg[n])) {
+        *attached = arg + n;
+        return true;
+    }
+    return false;
+}
 
 /** Parse one option at argv[*idx]. If option takes an argument, consumes *idx+1 and advances *idx. */
 static bool parse_option(int argc, const char *argv[], int *idx, clioptions *flags) {
     const char *arg = argv[*idx], *opt_arg = NULL;
     for (int j = 0; opt_table[j].s || opt_table[j].l; j++) {
-        const char *s = opt_table[j].s, *l = opt_table[j].l;
-        if ((s && strncmp(arg, s, strlen(s)) == 0) || (l && strncmp(arg, l, strlen(l)) == 0)) {
-            if (opt_table[j].takes_arg) {
-                if (*idx + 1 >= argc) {
-                    fprintf(stderr, "morpho: %s requires an argument.\n", arg);
-                    cli_setexitcode(EXIT_FAILURE);
-                    return false;
-                }
+        const char *attached = NULL;
+        bool match = option_matches(arg, opt_table[j].s, opt_table[j].takes_arg, &attached) ||
+                     option_matches(arg, opt_table[j].l, opt_table[j].takes_arg, &attached);
+        if (!match) continue;
+
+        if (opt_table[j].takes_arg) {
+            if (attached) {
+                opt_arg = attached;
+            } else if (*idx + 1 >= argc) {
+                fprintf(stderr, "morpho: %s requires an argument.\n", arg);
+                cli_setexitcode(EXIT_FAILURE);
+                return false;
+            } else {
                 opt_arg = argv[*idx + 1];
                 (*idx)++;
             }
-            opt_ctx ctx = { argc, argv, idx };
-            return opt_table[j].fn(arg, opt_arg, flags, &ctx);
         }
+        opt_ctx ctx = { argc, argv, idx };
+        return opt_table[j].fn(arg, opt_arg, flags, &ctx);
     }
     fprintf(stderr, "morpho: Unknown option %s.\n", arg);
     cli_setexitcode(EXIT_FAILURE);

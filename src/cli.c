@@ -697,11 +697,15 @@ void cli_disassemblewithsrc(program *p, char *src, clioptions opt) {
     int line=1, length=0;
     for (unsigned int i=0; src[i]!='\0'; i++) {
         length++;
-        if (src[i]=='\n' || src[i]=='\0') {
+        if (src[i]=='\n') {
             cli_printline(edit, line, ">>>", src+i-length+1, length);
             morpho_disassemble(NULL, p, NULL);
             line++; length=0;
         }
+    }
+    if (length > 0) {
+        cli_printline(edit, line, ">>>", src+strlen(src)-length, length+1);
+        morpho_disassemble(NULL, p, NULL);
     }
     
     inline_free(edit);
@@ -721,11 +725,14 @@ void cli_list(const char *src, int start, int end, clioptions opt) {
         int line=1, length=0;
         for (unsigned int i=0; src[i]!='\0'; i++) {
             length++;
-            if (src[i]=='\n' || src[i]=='\0') {
+            if (src[i]=='\n') {
                 if (line>=start && line <=end) cli_printline(edit, line, "", src+i-length+1, length);
                 line++;
                 length=0;
             }
+        }
+        if (length > 0 && line>=start && line <=end) {
+            cli_printline(edit, line, "", src+strlen(src)-length, length+1);
         }
         inline_free(edit);
     }
