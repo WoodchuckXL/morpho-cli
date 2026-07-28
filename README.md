@@ -35,7 +35,7 @@ into a terminal. The terminal app takes a number of optional arguments:
 | `-h`, `--help [query]` | Show CLI help, or look up a language help topic |
 | `-v`, `--version` | Show version information |
 | `-c`, `--check` | Check syntax without executing |
-| `-e`, `--eval <code>` | Execute a code string |
+| `-e`, `--eval <code>` | Execute a code string (before file/REPL if combined) |
 | `-i`, `--interactive` | Enter REPL after running a file |
 | `-l`, `--list <file>` | List a file with syntax highlighting |
 | `-d`, `--disassemble` | Show disassembly |

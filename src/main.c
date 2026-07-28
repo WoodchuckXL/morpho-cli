@@ -54,7 +54,7 @@ static bool opt_help(const char *opt, const char *arg, clioptions *flags, opt_ct
     printf("  -h, --help [query]      Show this help, or look up a language help topic\n");
     printf("  -v, --version           Show version information\n");
     printf("  -c, --check             Check syntax without executing\n");
-    printf("  -e, --eval <code>       Execute code string\n");
+    printf("  -e, --eval <code>       Execute code string (before file/REPL if combined)\n");
     printf("  -i, --interactive       Enter REPL after running file\n");
     printf("  -l, --list <file>       List file with syntax highlighting\n");
     printf("  -d, --disassemble       Show disassembly\n");
@@ -151,13 +151,19 @@ static bool opt_list(const char *opt, const char *arg, clioptions *flags, opt_ct
     return false; // Don't run program after listing 
 }
 
+static varray_char evalcode;
+
 static bool opt_eval(const char *opt, const char *arg, clioptions *flags, opt_ctx *ctx) {
-    (void)opt;
-    clidebugger_initialize();
-    if (ctx && ctx->idx && ctx->argc - *ctx->idx - 1 > 0)
-        morpho_setargs(ctx->argc - *ctx->idx - 1, ctx->argv + *ctx->idx + 1);
-    cli_runstring(arg, *flags);
-    return false;
+    (void)opt; (void)flags; (void)ctx;
+    if (!arg) return false;
+    /* Accumulate -e snippets; they are compiled before the file/REPL. */
+    if (evalcode.count > 0) {
+        evalcode.count--; /* drop trailing NUL */
+        varray_charwrite(&evalcode, '\n');
+    }
+    varray_charadd(&evalcode, (char *) arg, (int) strlen(arg));
+    varray_charwrite(&evalcode, '\0');
+    return true;
 }
 
 typedef struct {
@@ -244,6 +250,7 @@ int main(int argc, const char *argv[]) {
 
     morpho_initialize();
     cli_setexitcode(EXIT_SUCCESS);
+    varray_charinit(&evalcode);
 
     for (; i < argc && !file; i++) {
         const char *arg = argv[i];
@@ -255,22 +262,27 @@ int main(int argc, const char *argv[]) {
     if (run) {
         clidebugger_initialize();
         if (i < argc) morpho_setargs(argc - i, argv + i); // Pass unused args to morpho
+        const char *preamble = (evalcode.count > 0) ? evalcode.data : NULL;
         
         if (file) {
-            cli_run(file, opt);
+            cli_run(file, opt, preamble);
         } else if (!inline_checktty()) {
             // stdin is piped/redirected - read and execute from stdin
             char *src = cli_loadstdin();
-            if (src) {
-                cli_runstring(src, opt);
-                MORPHO_FREE(src);
+            if (src || preamble) {
+                cli_runstring(src, opt, preamble);
+                if (src) MORPHO_FREE(src);
             }
+        } else if (preamble && !(opt & CLI_INTERACTIVE)) {
+            // -e alone on a TTY: run the snippet and exit
+            cli_runstring(preamble, opt, NULL);
         } else {
-            // stdin is a TTY - enter REPL
-            cli(opt);
+            // stdin is a TTY - enter REPL (optionally after -e preamble)
+            cli(opt, preamble);
         }
     }
 
+    varray_charclear(&evalcode);
     morpho_finalize();
     return cli_exitcode();
 }

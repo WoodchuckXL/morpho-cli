@@ -50,9 +50,9 @@ void cli_displaywithstyle(int col, int emph, int n, ...);
 void cli_emitemphasis(int emph);
 void cli_reporterror(error *err, vm *v);
 
-void cli_run(const char *in, clioptions opt);
-void cli_runstring(const char *src, clioptions opt);
-void cli(clioptions opt);
+void cli_run(const char *in, clioptions opt, const char *preamble);
+void cli_runstring(const char *src, clioptions opt, const char *preamble);
+void cli(clioptions opt, const char *preamble);
 
 char *cli_loadsource(const char *in);
 char *cli_loadstdin(void);

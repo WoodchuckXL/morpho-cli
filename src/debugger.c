@@ -650,6 +650,10 @@ void clidebugger_enter(vm *v) {
 }
 
 void clidebugger_initialize(void) {
+    static bool initialized = false;
+    if (initialized) return;
+    initialized = true;
+
     morpho_defineerror(DBG_PRS, ERROR_PARSE, DBG_PRS_MSG);
     morpho_defineerror(DBG_INFO, ERROR_PARSE, DBG_INFO_MSG);
     morpho_defineerror(DBG_INVLD, ERROR_PARSE, DBG_INVLD_MSG);

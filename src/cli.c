@@ -395,10 +395,31 @@ typedef struct {
 
 /** Forward declaration */
 static void cli_repl(runtime_t *rt, clioptions opt);
+static bool cli_compileandrun(runtime_t *rt, const char *src, clioptions opt);
+static runtime_t cli_newruntime(clioptions opt);
+static void cli_freeruntime(runtime_t *rt);
+
+/** Compile preamble (if any) then src (if any) in an existing runtime.
+ *  @returns false if a compile/run step failed. */
+static bool cli_runpreambleandsource(runtime_t *rt, const char *preamble, const char *src, clioptions opt) {
+    if (preamble && *preamble) {
+        cli_globalsrc = (char *) preamble;
+        if (!cli_compileandrun(rt, preamble, opt)) return false;
+    }
+    if (src) {
+        cli_globalsrc = (char *) src;
+        if (!cli_compileandrun(rt, src, opt)) return false;
+    }
+    return true;
+}
 
 /** @brief Provide a command line interface */
-void cli(clioptions opt) {
-    cli_repl(NULL, opt); /* NULL means create new runtime */
+void cli(clioptions opt, const char *preamble) {
+    runtime_t rt = cli_newruntime(opt);
+    if (cli_runpreambleandsource(&rt, preamble, NULL, opt)) {
+        cli_repl(&rt, opt);
+    }
+    cli_freeruntime(&rt);
 }
 
 /* **********************************************************************
@@ -473,14 +494,10 @@ static bool cli_compileandrun(runtime_t *rt, const char *src, clioptions opt) {
  * ********************************************************************** */
 
 /** Compile and run source string (no file). Used by -e / --eval. */
-void cli_runstring(const char *src, clioptions opt) {
+void cli_runstring(const char *src, clioptions opt, const char *preamble) {
     runtime_t rt = cli_newruntime(opt);
-    cli_globalsrc = (char *)src;
     
-    cli_compileandrun(&rt, src, opt);
-    
-    /* If interactive mode, enter REPL with same VM (cleans up on exit) */
-    if (opt & CLI_INTERACTIVE) {
+    if (cli_runpreambleandsource(&rt, preamble, src, opt) && (opt & CLI_INTERACTIVE)) {
         cli_repl(&rt, opt);
     }
     cli_freeruntime(&rt);
@@ -587,27 +604,21 @@ static void cli_repl(runtime_t *rt, clioptions opt) {
  * Load and run a file
  * ********************************************************************** */
 
-void cli_run(const char *in, clioptions opt) {
+void cli_run(const char *in, clioptions opt, const char *preamble) {
     runtime_t rt = cli_newruntime(opt);
     
     char *src = cli_loadsource(in);
-    if (src) cli_globalsrc = src;
     
     file_setworkingdirectory(in);
     
     if (src) {
-        cli_compileandrun(&rt, src, opt);
+        if (cli_runpreambleandsource(&rt, preamble, src, opt) && (opt & CLI_INTERACTIVE)) {
+            cli_repl(&rt, opt);
+        }
         MORPHO_FREE(src);
     } else {
         printf("Could not open file '%s'.\n", in);
         cli_setexitcode(EXIT_FAILURE);
-        cli_freeruntime(&rt);
-        return;
-    }
-    
-    /* If interactive mode, enter REPL with same VM (cleans up on exit) */
-    if (opt & CLI_INTERACTIVE) {
-        cli_repl(&rt, opt);
     }
     cli_freeruntime(&rt);
 }
