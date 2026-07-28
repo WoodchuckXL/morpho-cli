@@ -531,7 +531,6 @@ static bool hlp_copyspan(const char *src, size_t n, char *buf, size_t bufsize) {
     return true;
 }
 
-#define RESET      "\x1B[0m"
 /** Display one line of paragraph/list text with inline `code`, *emphasis*, **bold**, _underline_. Escapes \* \_ \` \\ output the character literally. */
 static void hlp_displayline(inline_editor *edit, const char *line) {
     char buf[HLP_BUFFERSIZE];

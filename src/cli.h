@@ -14,8 +14,6 @@
 #include "inline.h"
 #include "hlp.h"
 
-#include "debugger.h"
-
 #define CLI_DEFAULTCOLOR -1
 #define CLI_ERRORCOLOR  INLINE_RED
 #define CLI_WARNINGCOLOR  INLINE_YELLOW
@@ -45,6 +43,8 @@ typedef unsigned int clioptions;
 extern char *cli_globalsrc;
 void cli_setexitcode(int code);
 int cli_exitcode(void);
+void cli_applyoptions(clioptions opt);
+bool cli_usecolor(void);
 
 void cli_displaywithstyle(int col, int emph, int n, ...);
 void cli_emitemphasis(int emph);
@@ -59,6 +59,9 @@ char *cli_loadstdin(void);
 void cli_disassemblewithsrc(program *p, char *src, clioptions opt);
 void cli_list(const char *in, int start, int end, clioptions opt);
 void cli_helpquery(const char *query, clioptions opt);
+
+void clidebugger_enter(vm *v);
+void clidebugger_initialize(void);
 
 #endif /* cli_h */
 

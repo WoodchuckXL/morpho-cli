@@ -217,6 +217,9 @@ void inline_setgraphemewidth(inline_editor *edit, inline_widthfn fn);
  *  @returns true if both stdin and stdout are terminals. */
 bool inline_checktty(void);
 
+/** @brief Check whether stdout is a TTY (for color/gated output when stdin may be piped). */
+bool inline_checkstdouttty(void);
+
 /** @brief Check is the terminal is supported (i.e. likely capable of processed output)
  *  @returns true if supported. */
 bool inline_checksupported(void);

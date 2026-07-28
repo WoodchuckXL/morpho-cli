@@ -10,6 +10,7 @@
 #include <string.h>
 #include <ctype.h>
 #include <stdarg.h>
+#include <limits.h>
 
 #include <morpho.h>
 #include <parse.h>
@@ -32,6 +33,7 @@
 
 char *cli_globalsrc=NULL;
 static int s_cli_lastexitcode = EXIT_SUCCESS;
+static clioptions s_cli_activeopt = 0;
 
 void cli_setexitcode(int code) {
     s_cli_lastexitcode = code;
@@ -39,6 +41,19 @@ void cli_setexitcode(int code) {
 
 int cli_exitcode(void) {
     return s_cli_lastexitcode;
+}
+
+void cli_applyoptions(clioptions opt) {
+    s_cli_activeopt = opt;
+}
+
+/** True when ANSI styling should be emitted. */
+bool cli_usecolor(void) {
+    if (s_cli_activeopt & CLI_NOCOLOR) return false;
+    const char *nocolor = getenv("NO_COLOR");
+    if (nocolor && *nocolor) return false;
+    if (!inline_checkstdouttty()) return false;
+    return inline_checksupported();
 }
 
 #define CLI_BUFFERSIZE 4096
@@ -62,22 +77,20 @@ void cli_emitemphasis(int emph) {
     }
 }
 
-bool is_supported = false;
-
-/** Displays several strings with a specified style using linedit */
+/** Displays several strings with a specified style */
 void cli_displaywithstyle(int col, int emph, int n, ...) {
     va_list args;
     va_start(args, n);
-    bool is_tty = inline_checktty() && is_supported; // Only emit escape codes if stdout is a TTY
+    bool color = cli_usecolor();
     
     fflush(stdout);
     for (int i=0; i<n; i++) {
         char *str = va_arg(args, char *);
-        if (is_tty) cli_emitemphasis(emph);
-        if (is_tty) if (col != CLI_DEFAULTCOLOR) inline_emitcolor(col);
+        if (color) cli_emitemphasis(emph);
+        if (color) if (col != CLI_DEFAULTCOLOR) inline_emitcolor(col);
         inline_emit(str);
     }
-    if (is_tty) inline_emit(RESET);
+    if (color) inline_emit(RESET);
     fflush(stdout);
     
     va_end(args);
@@ -193,11 +206,13 @@ void cli_inputcallbackfn(vm *v, void *ref, morphoinputmode mode, varray_char *st
 
 /** Warning callback */
 void cli_warningcallbackfn(vm *v, void *ref, error *err) {
+    (void)v; (void)ref;
     cli_displaywithstyle(CLI_WARNINGCOLOR, CLI_NOEMPHASIS, 5, "Warning '", err->id, "': ", err->msg, "\n");
 }
 
-/** Warning callback */
+/** Debugger callback */
 void cli_debuggercallbackfn(vm *v, void *ref) {
+    (void)ref;
     clidebugger_enter(v);
 }
 
@@ -319,10 +334,11 @@ bool cli_syntaxcolorfn(const char *in, void *ref, size_t offset, inline_colorspa
     return success;
 }
 
-static char *words[] = {"as", "and", "break", "class", "continue", "do", "else", "for", "false", "fn", "help", "if", "in", "import", "nil", "or", "print", "return", "true", "var", "while", "quit", "self", "super", "this", "try", "catch", NULL};
+static char *words[] = {"as", "and", "break", "catch", "class", "continue", "do", "else", "false", "fn", "for", "help", "if", "import", "in", "is", "nil", "or", "print", "quit", "return", "self", "super", "true", "try", "var", "while", "with", NULL};
 
 /** Autocomplete function */
 const char *cli_complete(const char *in, void *ref, size_t *index) {
+    (void)ref;
     size_t len=strlen(in);
     
     /* First find the last token in the input */
@@ -331,7 +347,7 @@ const char *cli_complete(const char *in, void *ref, size_t *index) {
     while (tok>in && !isspace(*(tok-1))) tok--;
     
     /* Ensure we have at least one character */
-    if (iscntrl(*tok)) return false;
+    if (iscntrl(*tok)) return NULL;
     
     /* Now try to match the token against a library of words */
     len=strlen(tok);
@@ -434,8 +450,11 @@ static runtime_t cli_newruntime(clioptions opt) {
     rt.v = morpho_newvm();
     rt.edit = inline_new(CLI_PROMPT);
     
-    is_supported = inline_checksupported(); // Ensure we are using a supported terminal
-    if (!(opt & CLI_NOCOLOR)) inline_syntaxcolor(rt.edit, cli_syntaxcolorfn, &rt.l);
+    cli_applyoptions(opt);
+    if (cli_usecolor()) {
+        inline_syntaxcolor(rt.edit, cli_syntaxcolorfn, &rt.l);
+        inline_setpalette(rt.edit, sizeof(palette)/sizeof(palette[0]), palette);
+    }
     
     morpho_setinputfn(rt.v, cli_inputcallbackfn, NULL);
     morpho_setprintfn(rt.v, cli_printcallbackfn, &rt.edit);
@@ -453,12 +472,32 @@ static void cli_freeruntime(runtime_t *rt) {
     if (rt->c) morpho_freecompiler(rt->c);
 }
 
+/** Run a compiled program according to CLI flags. */
+static bool cli_execute(runtime_t *rt, clioptions opt, error *err_out) {
+    if (!(opt & CLI_RUN)) return true;
+
+    bool success;
+    if (opt & CLI_DEBUG) {
+        success = morpho_debug(rt->v, rt->p);
+    } else if (opt & CLI_PROFILE) {
+        success = morpho_profile(rt->v, rt->p);
+    } else {
+        success = morpho_run(rt->v, rt->p);
+    }
+
+    if (!success) {
+        cli_reporterror(morpho_geterror(rt->v), rt->v);
+        if (err_out) *err_out = *morpho_geterror(rt->v);
+    }
+    return success;
+}
+
 /** Compile and execute source code */
 static bool cli_compileandrun(runtime_t *rt, const char *src, clioptions opt) {
     error err;
     error_init(&err);
     
-    bool success = morpho_compile((char *)src, rt->c, (opt & CLI_OPTIMIZE), &err);
+    bool success = morpho_compile((char *)src, rt->c, (opt & CLI_OPTIMIZE) != 0, &err);
     
     if (success) {
         if (opt & CLI_DISASSEMBLE) {
@@ -468,22 +507,9 @@ static bool cli_compileandrun(runtime_t *rt, const char *src, clioptions opt) {
                 morpho_disassemble(rt->v, rt->p, NULL);
             }
         }
-        if (opt & CLI_RUN) {
-            if (opt & CLI_DEBUG) {
-                success = morpho_debug(rt->v, rt->p);
-            } else if (opt & CLI_PROFILE) {
-                success = morpho_profile(rt->v, rt->p);
-            } else {
-                success = morpho_run(rt->v, rt->p);
-            }
-            if (!success) {
-                cli_reporterror(morpho_geterror(rt->v), rt->v);
-                cli_setexitcode(EXIT_FAILURE);
-            }
-        }
+        success = cli_execute(rt, opt, NULL);
     } else {
         cli_reporterror(&err, rt->v);
-        cli_setexitcode(EXIT_FAILURE);
     }
     
     return success;
@@ -503,15 +529,8 @@ void cli_runstring(const char *src, clioptions opt, const char *preamble) {
     cli_freeruntime(&rt);
 }
 
-/** Enter REPL mode, optionally reusing existing runtime */
+/** Enter REPL mode, reusing an existing runtime */
 static void cli_repl(runtime_t *rt, clioptions opt) {
-    bool own_runtime = (rt == NULL);
-    runtime_t runtime_storage;
-    if (own_runtime) {
-        runtime_storage = cli_newruntime(opt);
-        rt = &runtime_storage;
-    }
-    
     bool tty = inline_checktty();
     version morphoversion;
     morpho_version(&morphoversion);
@@ -529,9 +548,9 @@ static void cli_repl(runtime_t *rt, clioptions opt) {
     varray_charinit(&src);
     varray_charwrite(&src, '\0');
     
-    /* Configure editor for REPL (if not already configured) */
-    inline_setpalette(rt->edit, sizeof(palette)/sizeof(palette[0]), palette);
-    if (!(opt & CLI_NOCOLOR)) {
+    /* Configure editor for REPL */
+    if (cli_usecolor()) {
+        inline_setpalette(rt->edit, sizeof(palette)/sizeof(palette[0]), palette);
         inline_syntaxcolor(rt->edit, cli_syntaxcolorfn, &rt->l);
     }
     inline_multiline(rt->edit, cli_multiline, NULL, CLI_CONTINUATIONPROMPT);
@@ -564,7 +583,7 @@ static void cli_repl(runtime_t *rt, clioptions opt) {
             continue;
         }
         
-        bool success = morpho_compile(input, rt->c, false, &err);
+        bool success = morpho_compile(input, rt->c, (opt & CLI_OPTIMIZE) != 0, &err);
         
         if (success) {
             src.count--;
@@ -576,17 +595,9 @@ static void cli_repl(runtime_t *rt, clioptions opt) {
             if (opt & CLI_DISASSEMBLE) {
                 morpho_disassemble(rt->v, rt->p, NULL);
             }
-            if (opt & CLI_RUN) {
-                success = morpho_debug(rt->v, rt->p);
-                if (!success) {
-                    cli_reporterror(morpho_geterror(rt->v), rt->v);
-                    cli_setexitcode(EXIT_FAILURE);
-                    err = *morpho_geterror(rt->v);
-                }
-            }
+            success = cli_execute(rt, opt, &err);
         } else {
             cli_reporterror(&err, rt->v);
-            cli_setexitcode(EXIT_FAILURE);
         }
         
         free(input);
@@ -594,10 +605,6 @@ static void cli_repl(runtime_t *rt, clioptions opt) {
     
     varray_charclear(&src);
     hlp_finalize();
-    
-    if (own_runtime) {
-        cli_freeruntime(rt);
-    }
 }
 
 /* **********************************************************************
@@ -667,6 +674,7 @@ char *cli_loadsource(const char *in) {
     if (size) {
         /* Size the buffer to match */
         if (!varray_charresize(&buffer, size+1)) {
+            fclose(f);
             return NULL;
         }
         
@@ -674,10 +682,9 @@ char *cli_loadsource(const char *in) {
         for (char *c=buffer.data; !feof(f); c=c+strlen(c)) {
             if (!fgets(c, (int) (buffer.data+buffer.capacity-c), f)) { c[0]='\0'; break; }
         }
-        
-        fclose(f);
     }
     
+    fclose(f);
     return buffer.data;
 }
 
@@ -685,82 +692,93 @@ char *cli_loadsource(const char *in) {
  * Source listing and disassembly
  * ********************************************************************** */
 
-/** Displays a single line of source */
-static void cli_printline(inline_editor *edit, int line, char *prompt, const char *src, int length) {
+/** Create a temporary editor configured for colored display. */
+static inline_editor *cli_tempeditor(lexer *l) {
+    inline_editor *edit = inline_new("");
+    if (!edit) return NULL;
+    if (cli_usecolor()) {
+        inline_syntaxcolor(edit, cli_syntaxcolorfn, l);
+        inline_setpalette(edit, sizeof(palette)/sizeof(palette[0]), palette);
+    }
+    return edit;
+}
+
+/** Displays a single line of source. nbytes is the span length; a trailing newline is stripped. */
+static void cli_printline(inline_editor *edit, int line, const char *prompt, const char *src, int nbytes) {
     printf("%s %4u : ", prompt, line);
-    /* Display the src line */
-    char srcline[length];
-    strncpy(srcline, src, length-1);
-    srcline[length-1]='\0';
-    inline_displaywithsyntaxcoloring(edit, srcline);
+    char stackbuf[512];
+    char *buf = (nbytes + 1 <= (int) sizeof(stackbuf)) ? stackbuf : malloc((size_t) nbytes + 1);
+    if (!buf) return;
+    memcpy(buf, src, (size_t) nbytes);
+    buf[nbytes] = '\0';
+    if (nbytes > 0 && buf[nbytes - 1] == '\n') buf[nbytes - 1] = '\0';
+    inline_displaywithsyntaxcoloring(edit, buf);
     printf("\n");
+    if (buf != stackbuf) free(buf);
+}
+
+typedef void (*cli_sourcelinefn)(inline_editor *edit, int line, const char *start, int nbytes, void *ref);
+
+/** Walk source lines in [startline, endline] and invoke fn for each. */
+static void cli_foreachsourceline(const char *src, int startline, int endline,
+                                  cli_sourcelinefn fn, void *ref) {
+    if (!src || !fn) return;
+    lexer l;
+    inline_editor *edit = cli_tempeditor(&l);
+    if (!edit) return;
+
+    int line = 1, length = 0;
+    for (unsigned int i = 0; src[i] != '\0'; i++) {
+        length++;
+        if (src[i] == '\n') {
+            if (line >= startline && line <= endline)
+                fn(edit, line, src + i - length + 1, length, ref);
+            line++;
+            length = 0;
+        }
+    }
+    if (length > 0 && line >= startline && line <= endline)
+        fn(edit, line, src + strlen(src) - length, length, ref);
+
+    inline_free(edit);
+}
+
+static void cli_listline(inline_editor *edit, int line, const char *start, int nbytes, void *ref) {
+    (void)ref;
+    cli_printline(edit, line, "", start, nbytes);
+}
+
+static void cli_disassembleline(inline_editor *edit, int line, const char *start, int nbytes, void *ref) {
+    program *p = (program *) ref;
+    int matchline = line;
+    cli_printline(edit, line, ">>>", start, nbytes);
+    morpho_disassemble(NULL, p, &matchline);
 }
 
 /** Disassembles the program showing syntax colored lines of source */
 void cli_disassemblewithsrc(program *p, char *src, clioptions opt) {
-    inline_editor *edit = inline_new("");
-    if (!edit) return;
-    lexer l;
-    if (!(opt & CLI_NOCOLOR)) {
-        inline_syntaxcolor(edit, cli_syntaxcolorfn, &l);
-    }
-    
-    int line=1, length=0;
-    for (unsigned int i=0; src[i]!='\0'; i++) {
-        length++;
-        if (src[i]=='\n') {
-            cli_printline(edit, line, ">>>", src+i-length+1, length);
-            morpho_disassemble(NULL, p, NULL);
-            line++; length=0;
-        }
-    }
-    if (length > 0) {
-        cli_printline(edit, line, ">>>", src+strlen(src)-length, length+1);
-        morpho_disassemble(NULL, p, NULL);
-    }
-    
-    inline_free(edit);
+    clioptions prev = s_cli_activeopt;
+    s_cli_activeopt |= opt;
+    cli_foreachsourceline(src, 1, INT_MAX, cli_disassembleline, p);
+    s_cli_activeopt = prev;
 }
 
 /** Displays a source listing from source lines start to end */
 void cli_list(const char *src, int start, int end, clioptions opt) {
-    if (src) {
-        inline_editor *edit = inline_new("");
-        if (!edit) return;
-        lexer l;
-        if (!(opt & CLI_NOCOLOR)) {
-            inline_syntaxcolor(edit, cli_syntaxcolorfn, &l);
-            inline_setpalette(edit, sizeof(palette)/sizeof(palette[0]), palette);
-        }
-        
-        int line=1, length=0;
-        for (unsigned int i=0; src[i]!='\0'; i++) {
-            length++;
-            if (src[i]=='\n') {
-                if (line>=start && line <=end) cli_printline(edit, line, "", src+i-length+1, length);
-                line++;
-                length=0;
-            }
-        }
-        if (length > 0 && line>=start && line <=end) {
-            cli_printline(edit, line, "", src+strlen(src)-length, length+1);
-        }
-        inline_free(edit);
-    }
+    clioptions prev = s_cli_activeopt;
+    s_cli_activeopt |= opt;
+    cli_foreachsourceline(src, start, end, cli_listline, NULL);
+    s_cli_activeopt = prev;
 }
 
 /** Look up and display a help topic from the command line. */
 void cli_helpquery(const char *query, clioptions opt) {
-    inline_editor *edit = inline_new("");
+    cli_applyoptions(opt);
+    lexer l;
+    inline_editor *edit = cli_tempeditor(&l);
     if (!edit) {
         cli_setexitcode(EXIT_FAILURE);
         return;
-    }
-
-    lexer l;
-    if (!(opt & CLI_NOCOLOR)) {
-        inline_syntaxcolor(edit, cli_syntaxcolorfn, &l);
-        inline_setpalette(edit, sizeof(palette)/sizeof(palette[0]), palette);
     }
 
     error err;

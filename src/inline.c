@@ -266,6 +266,11 @@ bool inline_checktty(void) {
     return isatty(STDIN_FILENO) && isatty(STDOUT_FILENO);
 }
 
+/** API function to check whether stdout is a TTY. */
+bool inline_checkstdouttty(void) {
+    return isatty(STDOUT_FILENO);
+}
+
 /** Check whether the terminal type is supported. */
 bool inline_checksupported(void) {
 #ifndef _WIN32

@@ -13,6 +13,7 @@
 #include <debug.h>
 #include <gc.h>
 
+#include "cli.h"
 #include "debugger.h"
 
 #ifdef _WIN32
@@ -31,7 +32,7 @@ __declspec(dllimport) extern objecttype objectstringtype;
 
 typedef struct {
     debugger *debug; /** Debugger */
-    inline_editor *edit; /** lineeditor for output */
+    inline_editor *edit; /** Inline editor for output */
     error *err; /** Error structure to fill out  */
     char *info; /** Report any info to the user after error messages */
     bool stop;

@@ -73,7 +73,7 @@ static bool opt_help(const char *opt, const char *arg, clioptions *flags, opt_ct
 
 static bool opt_disassembleonly(const char *opt, const char *arg, clioptions *flags, opt_ctx *ctx) {
     (void)opt; (void)arg; (void)ctx;
-    *flags ^= CLI_RUN;
+    *flags &= ~CLI_RUN;
     *flags |= CLI_DISASSEMBLE;
     return true;
 }
@@ -141,13 +141,19 @@ static bool opt_interactive(const char *opt, const char *arg, clioptions *flags,
 
 static bool opt_list(const char *opt, const char *arg, clioptions *flags, opt_ctx *ctx) {
     (void)opt; (void)ctx;
-    if (!arg) return false;
+    if (!arg) {
+        cli_setexitcode(EXIT_FAILURE);
+        return false;
+    }
     
     char *src = cli_loadsource(arg);
     if (src) {
         cli_list(src, 1, INT_MAX, *flags);
         MORPHO_FREE(src);
-    } else fprintf(stderr, "morpho: Could not open file '%s'\n", arg);
+    } else {
+        fprintf(stderr, "morpho: Could not open file '%s'\n", arg);
+        cli_setexitcode(EXIT_FAILURE);
+    }
     return false; // Don't run program after listing 
 }
 
@@ -258,6 +264,8 @@ int main(int argc, const char *argv[]) {
             run &= parse_option(argc, argv, &i, &opt);
         } else if (arg) file = arg;
     }
+
+    cli_applyoptions(opt);
 
     if (run) {
         clidebugger_initialize();

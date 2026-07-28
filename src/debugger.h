@@ -7,7 +7,7 @@
 #ifndef debugger_h
 #define debugger_h
 
-#include "cli.h"
+#include "inline.h"
 
 #define DEBUGGER_PROMPT "@> "
 
