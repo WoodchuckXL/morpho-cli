@@ -1217,9 +1217,18 @@ static void inline_ensurecursorvisible(inline_editor *edit) {
 #define TERM_FAINT              "\x1b[2m"
 #define TERM_INVERSEVIDEO       "\x1b[7m"
 
+/** Write bytes to stdout (return value checked to silence warn_unused_result). */
+static void inline_write(const void *buf, size_t n) {
+#ifdef _WIN32
+    (void) write(STDOUT_FILENO, buf, (unsigned int) n);
+#else
+    if (write(STDOUT_FILENO, buf, n) < 0) { /* ignore */ }
+#endif
+}
+
 /** Write an escape sequence to the terminal */
 void inline_emit(const char *seq) {
-    write(STDOUT_FILENO, seq, (unsigned int) strlen(seq));
+    inline_write(seq, strlen(seq));
 }
 
 /** Writes an escape sequence to produce a given color */
@@ -1240,7 +1249,7 @@ void inline_emitcolor(int color) {
         n = snprintf(seq, sizeof(seq), "\x1b[38;2;%d;%d;%dm", r, g, b);
     }
 
-    if (n > 0) write(STDOUT_FILENO, seq, n);
+    if (n > 0) inline_write(seq, (size_t) n);
 }
 
 /** Clip grapheme range [*g_start, *g_end) horizontally based on viewport */
@@ -1278,12 +1287,12 @@ static inline void inline_clipgraphemerange(inline_editor *edit, int line_start,
 
 /** Move terminal cursor to the editor's origin */
 static inline void inline_movetoorigin(inline_editor *edit) {
-    write(STDOUT_FILENO, "\r", 1); // Move to start of current line
+    inline_write("\r", 1); // Move to start of current line
 
     if (edit->term_cursor_row > 0) { // Move up cursor_row lines
         char seq[INLINE_ESCAPECODE_MAXLENGTH];
         int n = snprintf(seq, sizeof(seq), "\x1b[%dA", edit->term_cursor_row);
-        write(STDOUT_FILENO, seq, n);
+        if (n > 0) inline_write(seq, (size_t) n);
     }
 }
 
@@ -1293,14 +1302,14 @@ static inline void inline_moveby(int dx, int dy) {
 
     if (dy<0) { // Up
         int n = snprintf(seq, sizeof(seq), "\x1b[%dA", abs(dy));
-        write(STDOUT_FILENO, seq, n);
+        if (n > 0) inline_write(seq, (size_t) n);
     } else {
         for (int i = 0; i < dy; i++) inline_emit("\n"); // Ensure scroll
     }
 
     if (dx!=0) { // Horizontal
         int n = snprintf(seq, sizeof(seq), "\x1b[%d%c", abs(dx), (dx < 0 ? 'D' : 'C'));
-        write(STDOUT_FILENO, seq, n);
+        if (n > 0) inline_write(seq, (size_t) n);
     }
 }
 
@@ -1316,7 +1325,7 @@ static inline void inline_moveby(int dx, int dy) {
  *                                     and prompt widt, or -1 if outside clipping window; otherwise not changed. */
 static void inline_renderline(inline_editor *edit, const char *prompt, size_t byte_start, size_t byte_end,
                                int logical_cursor_col, bool is_last, int *rendered_cursor_col) {
-    write(STDOUT_FILENO, prompt, (unsigned int) strlen(prompt)); // Write prompt
+    inline_write(prompt, strlen(prompt)); // Write prompt
     int prompt_width = 0; // Calculate its display width
     if (!inline_stringwidth(edit, prompt, &prompt_width)) prompt_width = 0;
 
@@ -1391,7 +1400,7 @@ static void inline_renderline(inline_editor *edit, const char *prompt, size_t by
 
             if (edit->buffer[gs] == '\t') {
                 for (int i=0; i<INLINE_TAB_WIDTH; i++) inline_emit(" ");
-            } else write(STDOUT_FILENO, edit->buffer + gs, (unsigned int) (ge - gs));
+            } else inline_write(edit->buffer + gs, ge - gs);
             rendered_width += width_fn(edit->buffer + gs, ge - gs);
         }
 
@@ -1414,7 +1423,7 @@ static void inline_renderline(inline_editor *edit, const char *prompt, size_t by
             if (ghost_width <= remaining_cols) { // Show suggestion as faint text
                 edit->suggestion_shown=true;
                 inline_emit(TERM_FAINT);
-                write(STDOUT_FILENO, suffix, (unsigned int) strlen(suffix));
+                inline_write(suffix, strlen(suffix));
                 inline_emit(TERM_RESETCOLOR);
             }
         }
@@ -1459,7 +1468,7 @@ static void inline_redraw(inline_editor *edit) {
         inline_emit(TERM_CLEAR);
     }
 
-    write(STDOUT_FILENO, "\r", 1); // Move to start of line
+    inline_write("\r", 1); // Move to start of line
     inline_moveby(rendered_cursor_col, cursor_row - edit->line_count - extra + 1);
     edit->term_cursor_row = cursor_row; // Record cursor row
     edit->term_lines_drawn = edit->line_count; // Record no. of lines drawn
@@ -1473,7 +1482,7 @@ void inline_displaywithsyntaxcoloring(inline_editor *edit, const char *string) {
     size_t len = strlen(string);
 
     if (!edit->syntax_fn || !edit->palette_count) { // Syntax highlighting not configured, fallback to plain
-        write(STDOUT_FILENO, string, (unsigned int) len);
+        inline_write(string, len);
         return;
     }
 
@@ -2178,7 +2187,7 @@ static void inline_supported(inline_editor *edit) {
     inline_disablerawmode(edit);
 
     if (edit->buffer_len > 0) inline_addhistory(edit, edit->buffer); // Add to history if non-empty
-    write(STDOUT_FILENO, "\r\n", 2);
+    inline_write("\r\n", 2);
 }
 
 /** API function to read a line of text from the user.
