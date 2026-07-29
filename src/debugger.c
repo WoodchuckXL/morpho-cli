@@ -4,12 +4,16 @@
  *  @brief Command line debugger
 */
 
+#include <string.h>
+#include <ctype.h>
+
 #include <compile.h>
 #include <vm.h>
 #include <parse.h>
 #include <debug.h>
 #include <gc.h>
 
+#include "cli.h"
 #include "debugger.h"
 
 #ifdef _WIN32
@@ -28,13 +32,13 @@ __declspec(dllimport) extern objecttype objectstringtype;
 
 typedef struct {
     debugger *debug; /** Debugger */
-    lineditor *edit; /** lineeditor for output */
+    inline_editor *edit; /** Inline editor for output */
     error *err; /** Error structure to fill out  */
     char *info; /** Report any info to the user after error messages */
     bool stop;
 } clidebugger;
 
-void clidebugger_init(clidebugger *debug, vm *v, lineditor *edit, error *err) {
+void clidebugger_init(clidebugger *debug, vm *v, inline_editor *edit, error *err) {
     debug->debug=vm_getdebugger(v);
     debugger_seterror(debug->debug, err);
     debug->edit=edit;
@@ -49,8 +53,8 @@ void clidebugger_init(clidebugger *debug, vm *v, lineditor *edit, error *err) {
 
 /** Display the morpho banner */
 void clidebugger_banner(clidebugger *debug) {
-    cli_displaywithstyle(debug->edit, DEBUGGER_COLOR, CLI_NOEMPHASIS, 1, "---Morpho debugger---\n");
-    cli_displaywithstyle(debug->edit, CLI_DEFAULTCOLOR, CLI_NOEMPHASIS, 1, "Type '?' or 'h' for help.\n");
+    cli_displaywithstyle(DEBUGGER_COLOR, CLI_NOEMPHASIS, 1, "---Morpho debugger---\n");
+    cli_displaywithstyle(CLI_DEFAULTCOLOR, CLI_NOEMPHASIS, 1, "Type '?' or 'h' for help.\n");
     
     morpho_printf(debugger_currentvm(debug->debug), "%s ", (debug->debug->singlestep ? "Single stepping" : "Breakpoint"));
     debugger_showlocation(debug->debug, debug->debug->iindx);
@@ -60,13 +64,13 @@ void clidebugger_banner(clidebugger *debug) {
 
 /** Display the resume text */
 void clidebugger_resumebanner(clidebugger *debug) {
-    cli_displaywithstyle(debug->edit, DEBUGGER_COLOR, CLI_NOEMPHASIS, 1, "---Resuming----------\n");
+    cli_displaywithstyle(DEBUGGER_COLOR, CLI_NOEMPHASIS, 1, "---Resuming----------\n");
 }
 
 /** Display an error message */
 void clidebugger_reporterror(clidebugger *debug) {
     if (debug->err->cat!=ERROR_NONE) {
-        cli_displaywithstyle(debug->edit, DEBUGGER_ERROR_COLOR, CLI_NOEMPHASIS, 3, "Error: ", debug->err->msg, "\n");
+        cli_displaywithstyle(DEBUGGER_ERROR_COLOR, CLI_NOEMPHASIS, 3, "Error: ", debug->err->msg, "\n");
     }
 }
 
@@ -89,7 +93,7 @@ void clidebugger_list(clidebugger *debug, int *nlines) {
             int start = line - n, end = line + n;
             if (start<0) start = 0;
             
-            cli_list(src, start, end);
+            cli_list(src, start, end, 0); // Use default (color enabled) for debugger
             if (in) MORPHO_FREE(src);
         }
     }
@@ -116,7 +120,7 @@ void clidebugger_clearinfo(clidebugger *debug) {
 
 /** Show info */
 void clidebugger_showinfo(clidebugger *debug) {
-    if (debug->info) cli_displaywithstyle(debug->edit, CLI_DEFAULTCOLOR, CLI_NOEMPHASIS, 1, debug->info);
+    if (debug->info) cli_displaywithstyle(CLI_DEFAULTCOLOR, CLI_NOEMPHASIS, 1, debug->info);
 }
 
 /* **********************************************************************
@@ -579,6 +583,38 @@ bool clidebugger_parse(clidebugger *debug, char *in) {
 }
 
 /* **********************************************************************
+ * Debugger autocomplete
+ * ********************************************************************** */
+
+static const char *debugger_commands[] = {
+    "address", "backtrace", "b", "break", "bt", "c", "clear", "continue",
+    "d", "disassem", "disassemble", "g", "gc", "global", "globals", "garbage",
+    "h", "help", "i", "info", "l", "list", "p", "print", "q", "quit",
+    "reg", "register", "registers", "s", "set", "stack", "step", "t", "trace", "x",
+    NULL
+};
+
+/** Autocomplete callback for debugger vocabulary (commands and sub-commands). */
+static const char *clidebugger_complete(const char *in, void *ref, size_t *index) {
+    (void) ref;
+    size_t len = strlen(in);
+    const char *tok = in + len;
+    while (tok > in && !isspace((unsigned char) *(tok - 1))) tok--;
+    if (tok >= in + len || iscntrl((unsigned char) *tok)) return NULL;
+    size_t toklen = strlen(tok);
+
+    for (size_t i = *index; debugger_commands[i] != NULL; i++) {
+        const char *cmd = debugger_commands[i];
+        size_t cmdlen = strlen(cmd);
+        if (toklen < cmdlen && strncmp(tok, cmd, toklen) == 0) {
+            *index = i + 1;
+            return cmd + toklen;
+        }
+    }
+    return NULL;
+}
+
+/* **********************************************************************
  * Debugger REPL
  * ********************************************************************** */
 
@@ -586,17 +622,15 @@ void clidebugger_enter(vm *v) {
     error err;
     error_init(&err);
     
-    lineditor edit;
-    linedit_init(&edit);
-    linedit_setprompt(&edit, DEBUGGER_PROMPT);
-    
+    inline_editor *edit = inline_new(DEBUGGER_PROMPT);
+    inline_autocomplete(edit, clidebugger_complete, NULL);
     clidebugger debug;
-    clidebugger_init(&debug, v, &edit, &err);
+    clidebugger_init(&debug, v, edit, &err);
     clidebugger_banner(&debug);
     
     while (!debug.stop) {
         clidebugger_clearinfo(&debug);
-        char *input = linedit(&edit);
+        char *input = inline_readline(edit);
         if (!input) break;
         
         if (!clidebugger_parse(&debug, input) ||
@@ -605,16 +639,22 @@ void clidebugger_enter(vm *v) {
             error_clear(&err);
         }
         
+        if (input) free(input);
+        
         clidebugger_showinfo(&debug);
     }
     
     clidebugger_resumebanner(&debug);
     
-    linedit_clear(&edit);
+    inline_free(edit);
     error_clear(&err);
 }
 
 void clidebugger_initialize(void) {
+    static bool initialized = false;
+    if (initialized) return;
+    initialized = true;
+
     morpho_defineerror(DBG_PRS, ERROR_PARSE, DBG_PRS_MSG);
     morpho_defineerror(DBG_INFO, ERROR_PARSE, DBG_INFO_MSG);
     morpho_defineerror(DBG_INVLD, ERROR_PARSE, DBG_INVLD_MSG);

@@ -1,18 +1,20 @@
-/** @file help.h
+/** @file hlp.h
  *  @author T J Atherton
  *
  *  @brief Interactive help system
 */
 
-#ifndef help_h
-#define help_h
+#ifndef hlp_h
+#define hlp_h
 
 #include <stdio.h>
 
 #include <morpho.h>
 #include <object.h>
 
-#include "linedit.h"
+#include "inline.h"
+
+#ifndef MORPHO_INCLUDE_HELP
 
 extern objecttype objecthelptopictype;
 #define OBJECT_HELPTOPIC objecthelptopictype
@@ -33,9 +35,21 @@ typedef struct sobjecthelptopic {
 
 size_t help_querylength(char *query, char **s);
 objecthelptopic *help_search(char *query);
-void help_display(lineditor *edit, objecthelptopic *topic);
+void help_display(inline_editor *edit, objecthelptopic *topic);
 
-bool help_initialize(void);
-void help_finalize(void); 
+#else
+#include <help.h>
 
-#endif /* help_h */
+#define HLP_TOPICS_HDR "Topics:\n"
+#define HLP_SUBTOPICS_HDR "Subtopics:\n"
+
+void hlp_displaytopic(inline_editor *edit, const help_topic *t);
+
+void hlp_displaytopiclist(inline_editor *edit, varray_value *topics, const char *heading);
+
+#endif
+
+bool hlp_initialize(void);
+void hlp_finalize(void);
+
+#endif /* hlp_h */
